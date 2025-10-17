@@ -83,7 +83,7 @@ export const [TaskProvider, useTasks] = createContextHook(() => {
     setHasCompletedOnboarding(true);
   }, []);
 
-  return useMemo(() => ({
+  return {
     tasks,
     selectedDate,
     setSelectedDate,
@@ -96,5 +96,5 @@ export const [TaskProvider, useTasks] = createContextHook(() => {
     deleteTask,
     getTasksForDate,
     markOnboardingComplete,
-  }), [tasks, selectedDate, selectedDateTasks, scheduledMinutes, isLoading, hasCompletedOnboarding, addTask, updateTask, deleteTask, getTasksForDate, markOnboardingComplete]);
+  };
 });
