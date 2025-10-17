@@ -24,7 +24,7 @@ const SUBSCRIPTION_KEY = '@planner_subscription';
 
 const FEATURES_BY_TIER: Record<SubscriptionTier, SubscriptionFeatures> = {
   free: {
-    maxTasksPerDay: 5,
+    maxTasksPerDay: 3,
     taskTemplates: false,
     analytics: false,
     customCategories: false,

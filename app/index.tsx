@@ -10,14 +10,16 @@ import {
   Animated,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { ChevronLeft, ChevronRight, Plus, List, Crown } from 'lucide-react-native';
+import { ChevronLeft, ChevronRight, Plus, List, Crown, LayoutGrid, Clock } from 'lucide-react-native';
 import { useRouter } from 'expo-router';
 import { useTasks } from '@/contexts/TaskContext';
 import { useSubscription } from '@/contexts/SubscriptionContext';
 import { TimeWheel } from '@/components/TimeWheel';
 import { formatMonthDay, getDayName, addDays } from '@/utils/dateHelpers';
 import { AddTaskModal } from '@/components/AddTaskModal';
+import { TaskList } from '@/components/TaskList';
 import { OnboardingFlow } from '@/components/OnboardingFlow';
+import { Task } from '@/constants/types';
 
 export default function PlannerScreen() {
   const insets = useSafeAreaInsets();
@@ -25,16 +27,53 @@ export default function PlannerScreen() {
   const { selectedDate, setSelectedDate, selectedDateTasks, scheduledMinutes, isLoading, hasCompletedOnboarding, markOnboardingComplete } = useTasks();
   const { canAddMoreTasks, isPremium } = useSubscription();
   const [isAddModalVisible, setIsAddModalVisible] = useState<boolean>(false);
+  const [viewMode, setViewMode] = useState<'wheel' | 'list'>('wheel');
+  const [editingTask, setEditingTask] = useState<Task | null>(null);
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const scaleAnim = useRef(new Animated.Value(0.95)).current;
   const buttonScale = useRef(new Animated.Value(1)).current;
+  const viewModeAnim = useRef(new Animated.Value(0)).current;
 
   const handlePreviousDay = () => {
+    Animated.sequence([
+      Animated.timing(fadeAnim, {
+        toValue: 0.3,
+        duration: 150,
+        useNativeDriver: true,
+      }),
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 150,
+        useNativeDriver: true,
+      }),
+    ]).start();
     setSelectedDate(addDays(selectedDate, -1));
   };
 
   const handleNextDay = () => {
+    Animated.sequence([
+      Animated.timing(fadeAnim, {
+        toValue: 0.3,
+        duration: 150,
+        useNativeDriver: true,
+      }),
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 150,
+        useNativeDriver: true,
+      }),
+    ]).start();
     setSelectedDate(addDays(selectedDate, 1));
+  };
+
+  const toggleViewMode = () => {
+    const newMode = viewMode === 'wheel' ? 'list' : 'wheel';
+    Animated.timing(viewModeAnim, {
+      toValue: newMode === 'list' ? 1 : 0,
+      duration: 300,
+      useNativeDriver: true,
+    }).start();
+    setViewMode(newMode);
   };
 
   React.useEffect(() => {
@@ -73,8 +112,14 @@ export default function PlannerScreen() {
         useNativeDriver: true,
       }),
     ]).start(() => {
+      setEditingTask(null);
       setIsAddModalVisible(true);
     });
+  };
+
+  const handleEditTask = (task: Task) => {
+    setEditingTask(task);
+    setIsAddModalVisible(true);
   };
 
   if (isLoading) {
@@ -95,8 +140,15 @@ export default function PlannerScreen() {
       <StatusBar barStyle="light-content" />
       
       <View style={[styles.header, { paddingTop: insets.top }]}>
-        <TouchableOpacity style={styles.iconButton}>
-          <List color="#FFF" size={24} />
+        <TouchableOpacity 
+          style={styles.iconButton}
+          onPress={toggleViewMode}
+        >
+          {viewMode === 'wheel' ? (
+            <List color="#FFF" size={24} />
+          ) : (
+            <LayoutGrid color="#FFF" size={24} />
+          )}
         </TouchableOpacity>
         
         <View style={styles.dateSelector}>
@@ -123,69 +175,105 @@ export default function PlannerScreen() {
         </TouchableOpacity>
       </View>
 
-      <ScrollView 
-        style={styles.content}
-        contentContainerStyle={styles.contentContainer}
-        showsVerticalScrollIndicator={false}
-      >
-        <Animated.View 
-          style={[
-            styles.wheelContainer,
-            {
-              opacity: fadeAnim,
-              transform: [{ scale: scaleAnim }],
-            },
-          ]}
+      {viewMode === 'wheel' ? (
+        <ScrollView 
+          style={styles.content}
+          contentContainerStyle={styles.contentContainer}
+          showsVerticalScrollIndicator={false}
         >
-          <TimeWheel 
-            tasks={selectedDateTasks} 
-            scheduledMinutes={scheduledMinutes}
-            dayName={getDayName(selectedDate)}
-          />
-        </Animated.View>
-
-        <Animated.View 
-          style={[
-            styles.statsContainer,
-            {
-              opacity: fadeAnim,
-            },
-          ]}
-        >
-          <View style={styles.statItem}>
-            <Text style={styles.statValue}>{selectedDateTasks.length}</Text>
-            <Text style={styles.statLabel}>Tasks</Text>
-          </View>
-          <View style={styles.statDivider} />
-          <View style={styles.statItem}>
-            <Text style={styles.statValue}>{Math.round(scheduledMinutes / 60)}h</Text>
-            <Text style={styles.statLabel}>Scheduled</Text>
-          </View>
-          <View style={styles.statDivider} />
-          <View style={styles.statItem}>
-            <Text style={styles.statValue}>{Math.round((1440 - scheduledMinutes) / 60)}h</Text>
-            <Text style={styles.statLabel}>Free</Text>
-          </View>
-        </Animated.View>
-
-        {!isPremium && selectedDateTasks.length >= 3 && (
-          <TouchableOpacity 
-            style={styles.upgradeCard}
-            onPress={() => router.push('/subscription')}
-          >
-            <View style={styles.upgradeIconContainer}>
-              <Crown size={32} color="#FFD700" fill="#FFD700" />
-            </View>
-            <View style={styles.upgradeContent}>
-              <Text style={styles.upgradeTitle}>Unlock Premium</Text>
-              <Text style={styles.upgradeDescription}>
-                Get unlimited tasks, templates, analytics & more
+          {selectedDateTasks.length === 0 ? (
+            <Animated.View 
+              style={[
+                styles.emptyWheelState,
+                {
+                  opacity: fadeAnim,
+                  transform: [{ scale: scaleAnim }],
+                },
+              ]}
+            >
+              <View style={styles.emptyWheelIcon}>
+                <Clock size={64} color="#333" strokeWidth={1.5} />
+              </View>
+              <Text style={styles.emptyWheelTitle}>Your Day Awaits</Text>
+              <Text style={styles.emptyWheelDescription}>
+                Start planning by adding your first task
               </Text>
+              <TouchableOpacity 
+                style={styles.emptyWheelButton}
+                onPress={handleAddButtonPress}
+              >
+                <Plus size={18} color="#FFF" strokeWidth={2.5} />
+                <Text style={styles.emptyWheelButtonText}>Add Your First Task</Text>
+              </TouchableOpacity>
+            </Animated.View>
+          ) : (
+            <Animated.View 
+              style={[
+                styles.wheelContainer,
+                {
+                  opacity: fadeAnim,
+                  transform: [{ scale: scaleAnim }],
+                },
+              ]}
+            >
+              <TimeWheel 
+                tasks={selectedDateTasks} 
+                scheduledMinutes={scheduledMinutes}
+                dayName={getDayName(selectedDate)}
+              />
+            </Animated.View>
+          )}
+
+          {selectedDateTasks.length > 0 && (
+            <Animated.View 
+              style={[
+                styles.statsContainer,
+                {
+                  opacity: fadeAnim,
+                },
+              ]}
+            >
+            <View style={styles.statItem}>
+              <Text style={styles.statValue}>{selectedDateTasks.length}</Text>
+              <Text style={styles.statLabel}>Tasks</Text>
             </View>
-            <ChevronRight color="#FFD700" size={24} />
-          </TouchableOpacity>
-        )}
-      </ScrollView>
+            <View style={styles.statDivider} />
+            <View style={styles.statItem}>
+              <Text style={styles.statValue}>{Math.round(scheduledMinutes / 60)}h</Text>
+              <Text style={styles.statLabel}>Scheduled</Text>
+            </View>
+            <View style={styles.statDivider} />
+            <View style={styles.statItem}>
+              <Text style={styles.statValue}>{Math.round((1440 - scheduledMinutes) / 60)}h</Text>
+              <Text style={styles.statLabel}>Free</Text>
+            </View>
+            </Animated.View>
+          )}
+
+          {!isPremium && selectedDateTasks.length >= 3 && (
+            <TouchableOpacity 
+              style={styles.upgradeCard}
+              onPress={() => router.push('/subscription')}
+            >
+              <View style={styles.upgradeIconContainer}>
+                <Crown size={32} color="#FFD700" fill="#FFD700" />
+              </View>
+              <View style={styles.upgradeContent}>
+                <Text style={styles.upgradeTitle}>Unlock Premium</Text>
+                <Text style={styles.upgradeDescription}>
+                  Get unlimited tasks, templates, analytics & more
+                </Text>
+              </View>
+              <ChevronRight color="#FFD700" size={24} />
+            </TouchableOpacity>
+          )}
+        </ScrollView>
+      ) : (
+        <TaskList 
+          tasks={selectedDateTasks}
+          onEditTask={handleEditTask}
+        />
+      )}
 
       <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom, 16) }]}>
         <Animated.View style={{ transform: [{ scale: buttonScale }] }}>
@@ -203,11 +291,18 @@ export default function PlannerScreen() {
         visible={isAddModalVisible}
         animationType="slide"
         presentationStyle="pageSheet"
-        onRequestClose={() => setIsAddModalVisible(false)}
+        onRequestClose={() => {
+          setIsAddModalVisible(false);
+          setEditingTask(null);
+        }}
       >
         <AddTaskModal
           selectedDate={selectedDate}
-          onClose={() => setIsAddModalVisible(false)}
+          editingTask={editingTask}
+          onClose={() => {
+            setIsAddModalVisible(false);
+            setEditingTask(null);
+          }}
         />
       </Modal>
     </View>
@@ -369,6 +464,56 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '700',
     color: '#0A0A0A',
+    letterSpacing: 0.3,
+  },
+  viewContainer: {
+    flex: 1,
+  },
+  emptyWheelState: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 60,
+    paddingHorizontal: 40,
+  },
+  emptyWheelIcon: {
+    width: 140,
+    height: 140,
+    backgroundColor: '#121212',
+    borderRadius: 70,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 32,
+    borderWidth: 1,
+    borderColor: '#1A1A1A',
+  },
+  emptyWheelTitle: {
+    fontSize: 28,
+    fontWeight: '800',
+    color: '#FFF',
+    marginBottom: 12,
+    textAlign: 'center',
+  },
+  emptyWheelDescription: {
+    fontSize: 16,
+    color: '#666',
+    textAlign: 'center',
+    lineHeight: 24,
+    marginBottom: 32,
+  },
+  emptyWheelButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#4A9B9B',
+    borderRadius: 12,
+    paddingVertical: 14,
+    paddingHorizontal: 24,
+    gap: 8,
+  },
+  emptyWheelButtonText: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#FFF',
     letterSpacing: 0.3,
   },
 });

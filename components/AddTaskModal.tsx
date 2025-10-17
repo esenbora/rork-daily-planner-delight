@@ -13,24 +13,25 @@ import { X, Sparkles, Lock } from 'lucide-react-native';
 import { useRouter } from 'expo-router';
 import { useTasks } from '@/contexts/TaskContext';
 import { useSubscription } from '@/contexts/SubscriptionContext';
-import { TaskCategory, CATEGORY_CONFIGS } from '@/constants/types';
+import { Task, TaskCategory, CATEGORY_CONFIGS } from '@/constants/types';
 import { TASK_TEMPLATES } from '@/constants/taskTemplates';
 import { formatDate } from '@/utils/dateHelpers';
 
 interface AddTaskModalProps {
   selectedDate: Date;
+  editingTask?: Task | null;
   onClose: () => void;
 }
 
-export const AddTaskModal: React.FC<AddTaskModalProps> = ({ selectedDate, onClose }) => {
+export const AddTaskModal: React.FC<AddTaskModalProps> = ({ selectedDate, editingTask, onClose }) => {
   const router = useRouter();
-  const { addTask } = useTasks();
+  const { addTask, updateTask } = useTasks();
   const { hasFeature } = useSubscription();
-  const [title, setTitle] = useState<string>('');
-  const [category, setCategory] = useState<TaskCategory>('meeting');
-  const [startHour, setStartHour] = useState<number>(9);
-  const [startMinute, setStartMinute] = useState<number>(0);
-  const [duration, setDuration] = useState<number>(60);
+  const [title, setTitle] = useState<string>(editingTask?.title || '');
+  const [category, setCategory] = useState<TaskCategory>(editingTask?.category || 'meeting');
+  const [startHour, setStartHour] = useState<number>(editingTask ? Math.floor(editingTask.startTime / 60) : 9);
+  const [startMinute, setStartMinute] = useState<number>(editingTask ? editingTask.startTime % 60 : 0);
+  const [duration, setDuration] = useState<number>(editingTask?.duration || 60);
 
   const handleSave = () => {
     if (!title.trim()) {
@@ -39,13 +40,22 @@ export const AddTaskModal: React.FC<AddTaskModalProps> = ({ selectedDate, onClos
 
     const startTime = startHour * 60 + startMinute;
 
-    addTask({
-      title: title.trim(),
-      category,
-      startTime,
-      duration,
-      date: formatDate(selectedDate),
-    });
+    if (editingTask) {
+      updateTask(editingTask.id, {
+        title: title.trim(),
+        category,
+        startTime,
+        duration,
+      });
+    } else {
+      addTask({
+        title: title.trim(),
+        category,
+        startTime,
+        duration,
+        date: formatDate(selectedDate),
+      });
+    }
 
     onClose();
   };
@@ -61,14 +71,14 @@ export const AddTaskModal: React.FC<AddTaskModalProps> = ({ selectedDate, onClos
         <TouchableOpacity onPress={onClose} style={styles.closeButton}>
           <X color="#FFF" size={24} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>New Task</Text>
+        <Text style={styles.headerTitle}>{editingTask ? 'Edit Task' : 'New Task'}</Text>
         <TouchableOpacity onPress={handleSave} style={styles.saveButton}>
           <Text style={styles.saveButtonText}>Save</Text>
         </TouchableOpacity>
       </View>
 
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-        {hasFeature('taskTemplates') && (
+        {hasFeature('taskTemplates') && !editingTask && (
           <View style={styles.section}>
             <View style={styles.labelRow}>
               <Text style={styles.label}>Quick Templates</Text>
@@ -113,7 +123,7 @@ export const AddTaskModal: React.FC<AddTaskModalProps> = ({ selectedDate, onClos
           </View>
         )}
 
-        {!hasFeature('taskTemplates') && (
+        {!hasFeature('taskTemplates') && !editingTask && (
           <TouchableOpacity 
             style={styles.section}
             onPress={() => {
