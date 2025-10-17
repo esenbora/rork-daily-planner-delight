@@ -5,18 +5,26 @@ import { Task } from '@/constants/types';
 import { formatDate } from '@/utils/dateHelpers';
 
 const STORAGE_KEY = '@planner_tasks';
+const ONBOARDING_COMPLETE_KEY = '@planner_onboarding_complete';
 
 export const [TaskProvider, useTasks] = createContextHook(() => {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [hasCompletedOnboarding, setHasCompletedOnboarding] = useState<boolean>(false);
 
   const loadTasks = useCallback(async () => {
     try {
-      const stored = await AsyncStorage.getItem(STORAGE_KEY);
-      if (stored) {
-        setTasks(JSON.parse(stored));
+      const [storedTasks, onboardingStatus] = await Promise.all([
+        AsyncStorage.getItem(STORAGE_KEY),
+        AsyncStorage.getItem(ONBOARDING_COMPLETE_KEY),
+      ]);
+      
+      if (storedTasks) {
+        setTasks(JSON.parse(storedTasks));
       }
+      
+      setHasCompletedOnboarding(onboardingStatus === 'true');
     } catch (error) {
       console.error('Failed to load tasks:', error);
     } finally {
@@ -71,6 +79,10 @@ export const [TaskProvider, useTasks] = createContextHook(() => {
     return selectedDateTasks.reduce((total, task) => total + task.duration, 0);
   }, [selectedDateTasks]);
 
+  const markOnboardingComplete = useCallback(() => {
+    setHasCompletedOnboarding(true);
+  }, []);
+
   return useMemo(() => ({
     tasks,
     selectedDate,
@@ -78,9 +90,11 @@ export const [TaskProvider, useTasks] = createContextHook(() => {
     selectedDateTasks,
     scheduledMinutes,
     isLoading,
+    hasCompletedOnboarding,
     addTask,
     updateTask,
     deleteTask,
     getTasksForDate,
-  }), [tasks, selectedDate, selectedDateTasks, scheduledMinutes, isLoading, addTask, updateTask, deleteTask, getTasksForDate]);
+    markOnboardingComplete,
+  }), [tasks, selectedDate, selectedDateTasks, scheduledMinutes, isLoading, hasCompletedOnboarding, addTask, updateTask, deleteTask, getTasksForDate, markOnboardingComplete]);
 });

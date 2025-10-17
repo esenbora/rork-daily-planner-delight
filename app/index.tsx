@@ -14,10 +14,11 @@ import { useTasks } from '@/contexts/TaskContext';
 import { TimeWheel } from '@/components/TimeWheel';
 import { formatMonthDay, getDayName, addDays } from '@/utils/dateHelpers';
 import { AddTaskModal } from '@/components/AddTaskModal';
+import { OnboardingFlow } from '@/components/OnboardingFlow';
 
 export default function PlannerScreen() {
   const insets = useSafeAreaInsets();
-  const { selectedDate, setSelectedDate, selectedDateTasks, scheduledMinutes } = useTasks();
+  const { selectedDate, setSelectedDate, selectedDateTasks, scheduledMinutes, isLoading, hasCompletedOnboarding, markOnboardingComplete } = useTasks();
   const [isAddModalVisible, setIsAddModalVisible] = useState<boolean>(false);
 
   const handlePreviousDay = () => {
@@ -27,6 +28,18 @@ export default function PlannerScreen() {
   const handleNextDay = () => {
     setSelectedDate(addDays(selectedDate, 1));
   };
+
+  if (isLoading) {
+    return (
+      <View style={[styles.container, styles.loadingContainer]}>
+        <StatusBar barStyle="light-content" />
+      </View>
+    );
+  }
+
+  if (!hasCompletedOnboarding) {
+    return <OnboardingFlow onComplete={markOnboardingComplete} />;
+  }
 
   return (
     <View style={styles.container}>
@@ -117,6 +130,10 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#0A0A0A',
+  },
+  loadingContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   backgroundHeader: {
     position: 'absolute' as const,
