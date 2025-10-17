@@ -384,7 +384,6 @@ const styles = StyleSheet.create({
     top: 0,
     left: 0,
     right: 0,
-    background: 'linear-gradient(180deg, #1A1A2E 0%, #0A0A0A 100%)',
     backgroundColor: '#1A1A2E',
   },
   header: {
