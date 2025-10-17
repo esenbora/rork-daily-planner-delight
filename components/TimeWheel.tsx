@@ -11,13 +11,13 @@ interface TimeWheelProps {
 }
 
 const { width } = Dimensions.get('window');
-const WHEEL_SIZE = Math.min(width * 0.75, 380);
+const WHEEL_SIZE = Math.min(width * 0.8, 360);
 const CENTER = WHEEL_SIZE / 2;
-const OUTER_RADIUS = WHEEL_SIZE / 2 - 20;
-const INNER_RADIUS = WHEEL_SIZE / 2 - 90;
-const TICK_OUTER = WHEEL_SIZE / 2 - 15;
-const TICK_INNER_MAJOR = WHEEL_SIZE / 2 - 35;
-const TICK_INNER_MINOR = WHEEL_SIZE / 2 - 25;
+const OUTER_RADIUS = WHEEL_SIZE / 2 - 24;
+const INNER_RADIUS = WHEEL_SIZE / 2 - 80;
+const TICK_OUTER = WHEEL_SIZE / 2 - 18;
+const TICK_INNER_MAJOR = WHEEL_SIZE / 2 - 38;
+const TICK_INNER_MINOR = WHEEL_SIZE / 2 - 28;
 
 export const TimeWheel: React.FC<TimeWheelProps> = ({ tasks, scheduledMinutes, dayName }) => {
   const taskArcs = useMemo(() => {
@@ -108,22 +108,31 @@ export const TimeWheel: React.FC<TimeWheelProps> = ({ tasks, scheduledMinutes, d
 
   return (
     <View style={styles.container}>
+      <View style={styles.wheelShadow} />
       <Svg width={WHEEL_SIZE} height={WHEEL_SIZE}>
+        <Circle
+          cx={CENTER}
+          cy={CENTER}
+          r={OUTER_RADIUS + 4}
+          fill="none"
+          stroke="rgba(139, 122, 199, 0.15)"
+          strokeWidth={8}
+        />
         <Circle
           cx={CENTER}
           cy={CENTER}
           r={OUTER_RADIUS}
           fill="none"
-          stroke="#1A1A1A"
-          strokeWidth={1}
+          stroke="#1A1A2E"
+          strokeWidth={2}
         />
         <Circle
           cx={CENTER}
           cy={CENTER}
           r={INNER_RADIUS}
           fill="none"
-          stroke="#1A1A1A"
-          strokeWidth={1}
+          stroke="#1A1A2E"
+          strokeWidth={2}
         />
         
         {hourTicks.map(tick => {
@@ -132,8 +141,8 @@ export const TimeWheel: React.FC<TimeWheelProps> = ({ tasks, scheduledMinutes, d
               <Path
                 key={tick.id}
                 d={`M ${tick.x1} ${tick.y1} L ${tick.x2} ${tick.y2}`}
-                stroke={tick.isMajor ? '#444' : '#222'}
-                strokeWidth={tick.isMajor ? 2 : 1}
+                stroke={tick.isMajor ? 'rgba(139, 122, 199, 0.5)' : 'rgba(139, 122, 199, 0.2)'}
+                strokeWidth={tick.isMajor ? 2.5 : 1.5}
               />
             );
           } else if ('label' in tick) {
@@ -142,9 +151,9 @@ export const TimeWheel: React.FC<TimeWheelProps> = ({ tasks, scheduledMinutes, d
                 key={tick.id}
                 x={tick.labelX}
                 y={tick.labelY}
-                fill="#666"
-                fontSize="12"
-                fontWeight="500"
+                fill="#8B7AC7"
+                fontSize="13"
+                fontWeight="600"
                 textAnchor="middle"
                 alignmentBaseline="middle"
               >
@@ -160,20 +169,13 @@ export const TimeWheel: React.FC<TimeWheelProps> = ({ tasks, scheduledMinutes, d
             <Path
               d={arc.path}
               fill={arc.color}
-              opacity={0.9}
+              opacity={0.85}
             />
-            <SvgText
-              x={arc.labelX}
-              y={arc.labelY}
-              fill="#FFF"
-              fontSize="11"
-              fontWeight="600"
-              textAnchor="middle"
-              alignmentBaseline="middle"
-              transform={`rotate(${arc.labelAngle}, ${arc.labelX}, ${arc.labelY})`}
-            >
-              {arc.label}
-            </SvgText>
+            <Path
+              d={arc.path}
+              fill="url(#gradient)"
+              opacity={0.3}
+            />
           </G>
         ))}
       </Svg>
@@ -190,23 +192,42 @@ const styles = StyleSheet.create({
   container: {
     alignItems: 'center',
     justifyContent: 'center',
-    position: 'relative',
+    position: 'relative' as const,
+  },
+  wheelShadow: {
+    position: 'absolute' as const,
+    width: WHEEL_SIZE - 40,
+    height: WHEEL_SIZE - 40,
+    borderRadius: (WHEEL_SIZE - 40) / 2,
+    backgroundColor: 'rgba(139, 122, 199, 0.1)',
+    shadowColor: '#8B7AC7',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.3,
+    shadowRadius: 24,
+    elevation: 12,
   },
   centerInfo: {
-    position: 'absolute',
+    position: 'absolute' as const,
     alignItems: 'center',
     justifyContent: 'center',
+    backgroundColor: '#0A0A0A',
+    borderRadius: 60,
+    width: 120,
+    height: 120,
+    borderWidth: 2,
+    borderColor: 'rgba(139, 122, 199, 0.3)',
   },
   dayLabel: {
-    fontSize: 18,
-    fontWeight: '700',
+    fontSize: 20,
+    fontWeight: '800',
     color: '#FFF',
-    letterSpacing: 1,
-    marginBottom: 4,
+    letterSpacing: 1.5,
+    marginBottom: 6,
+    textTransform: 'uppercase',
   },
   scheduledText: {
-    fontSize: 13,
-    color: '#888',
-    fontWeight: '400',
+    fontSize: 12,
+    color: '#8B7AC7',
+    fontWeight: '600',
   },
 });
