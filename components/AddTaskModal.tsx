@@ -13,7 +13,7 @@ import { X, Sparkles, Lock, Repeat } from 'lucide-react-native';
 import { useRouter } from 'expo-router';
 import { useTasks } from '@/contexts/TaskContext';
 import { useSubscription } from '@/contexts/SubscriptionContext';
-import { Task, TaskCategory, CATEGORY_CONFIGS, RepeatType } from '@/constants/types';
+import { Task, TaskCategory, CATEGORY_CONFIGS, RepeatType, TaskPriority } from '@/constants/types';
 import { TASK_TEMPLATES } from '@/constants/taskTemplates';
 import { formatDate } from '@/utils/dateHelpers';
 
@@ -33,6 +33,8 @@ export const AddTaskModal: React.FC<AddTaskModalProps> = ({ selectedDate, editin
   const [startMinute, setStartMinute] = useState<number>(editingTask ? editingTask.startTime % 60 : 0);
   const [duration, setDuration] = useState<number>(editingTask?.duration || 60);
   const [repeatType, setRepeatType] = useState<RepeatType>(editingTask?.repeatType || 'none');
+  const [notes, setNotes] = useState<string>(editingTask?.notes || '');
+  const [priority, setPriority] = useState<TaskPriority | undefined>(editingTask?.priority);
 
   const handleSave = () => {
     if (!title.trim()) {
@@ -48,6 +50,8 @@ export const AddTaskModal: React.FC<AddTaskModalProps> = ({ selectedDate, editin
         startTime,
         duration,
         repeatType,
+        notes: notes.trim() || undefined,
+        priority,
       });
     } else {
       addTask({
@@ -58,6 +62,8 @@ export const AddTaskModal: React.FC<AddTaskModalProps> = ({ selectedDate, editin
         date: formatDate(selectedDate),
         completed: false,
         repeatType,
+        notes: notes.trim() || undefined,
+        priority,
       });
     }
 
@@ -302,6 +308,49 @@ export const AddTaskModal: React.FC<AddTaskModalProps> = ({ selectedDate, editin
             })}
           </View>
         </View>
+
+        <View style={styles.section}>
+          <Text style={styles.label}>Priority</Text>
+          <View style={styles.repeatGrid}>
+            {(['high', 'medium', 'low'] as TaskPriority[]).map(p => {
+              const isSelected = priority === p;
+              const color = p === 'high' ? '#C75B6E' : p === 'medium' ? '#A88E4F' : '#7AC79B';
+              return (
+                <TouchableOpacity
+                  key={p}
+                  style={[
+                    styles.repeatButton,
+                    isSelected && { backgroundColor: color, borderColor: color },
+                  ]}
+                  onPress={() => setPriority(isSelected ? undefined : p)}
+                >
+                  <Text
+                    style={[
+                      styles.repeatText,
+                      isSelected && styles.repeatTextSelected,
+                    ]}
+                  >
+                    {p.charAt(0).toUpperCase() + p.slice(1)}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        </View>
+
+        <View style={styles.section}>
+          <Text style={styles.label}>Notes (Optional)</Text>
+          <TextInput
+            style={[styles.input, styles.notesInput]}
+            value={notes}
+            onChangeText={setNotes}
+            placeholder="Add notes or description..."
+            placeholderTextColor="#444"
+            multiline
+            numberOfLines={4}
+            textAlignVertical="top"
+          />
+        </View>
       </ScrollView>
     </SafeAreaView>
   );
@@ -459,6 +508,9 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: 'rgba(139, 122, 199, 0.2)',
     fontWeight: '500',
+  },
+  notesInput: {
+    minHeight: 100,
   },
   categoryGrid: {
     flexDirection: 'row',

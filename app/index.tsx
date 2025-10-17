@@ -10,15 +10,17 @@ import {
   Animated,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { ChevronLeft, ChevronRight, Plus, Crown, Clock, Edit2, Trash2, Calendar, Check, CalendarDays, BarChart3 } from 'lucide-react-native';
+import { ChevronLeft, ChevronRight, Plus, Crown, Clock, Calendar, CalendarDays, BarChart3, Target } from 'lucide-react-native';
 import { useRouter } from 'expo-router';
 import { useTasks } from '@/contexts/TaskContext';
 import { useSubscription } from '@/contexts/SubscriptionContext';
 import { TimeWheel } from '@/components/TimeWheel';
-import { formatMonthDay, getDayName, addDays, formatTimeFromMinutes, formatDuration } from '@/utils/dateHelpers';
+import { formatMonthDay, getDayName, addDays } from '@/utils/dateHelpers';
 import { AddTaskModal } from '@/components/AddTaskModal';
 import { OnboardingFlow } from '@/components/OnboardingFlow';
-import { Task, CATEGORY_CONFIGS } from '@/constants/types';
+import { Task } from '@/constants/types';
+import { TaskItem } from '@/components/TaskItem';
+import { TaskFilters, FilterState } from '@/components/TaskFilters';
 
 export default function PlannerScreen() {
   const insets = useSafeAreaInsets();
@@ -27,6 +29,12 @@ export default function PlannerScreen() {
   const { canAddMoreTasks, isPremium } = useSubscription();
   const [isAddModalVisible, setIsAddModalVisible] = useState<boolean>(false);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
+  const [filters, setFilters] = useState<FilterState>({
+    search: '',
+    categories: [],
+    priorities: [],
+    showCompleted: true,
+  });
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const scaleAnim = useRef(new Animated.Value(0.95)).current;
   const buttonScale = useRef(new Animated.Value(1)).current;
@@ -108,6 +116,24 @@ export default function PlannerScreen() {
     setEditingTask(task);
     setIsAddModalVisible(true);
   };
+
+  const filteredTasks = React.useMemo(() => {
+    return selectedDateTasks.filter(task => {
+      if (filters.search && !task.title.toLowerCase().includes(filters.search.toLowerCase())) {
+        return false;
+      }
+      if (filters.categories.length > 0 && !filters.categories.includes(task.category)) {
+        return false;
+      }
+      if (filters.priorities.length > 0 && !filters.priorities.includes(task.priority || 'low')) {
+        return false;
+      }
+      if (!filters.showCompleted && task.completed) {
+        return false;
+      }
+      return true;
+    });
+  }, [selectedDateTasks, filters]);
 
   if (isLoading) {
     return (
@@ -224,16 +250,27 @@ export default function PlannerScreen() {
                 <Text style={styles.taskCount}>{selectedDateTasks.length}</Text>
               </View>
 
-              {selectedDateTasks.map((task, index) => (
-                <TaskCard 
+              <TaskFilters filters={filters} onFiltersChange={setFilters} />
+
+              {filteredTasks.map((task) => (
+                <TaskItem
                   key={task.id}
                   task={task}
-                  index={index}
                   onEdit={() => handleEditTask(task)}
                   onDelete={() => deleteTask(task.id)}
                   onToggleComplete={() => toggleTaskCompletion(task.id)}
                 />
               ))}
+
+              {filteredTasks.length > 0 && (
+                <TouchableOpacity 
+                  style={styles.focusModeButton}
+                  onPress={() => router.push(`/focus?taskId=${filteredTasks[0].id}`)}
+                >
+                  <Target size={20} color="#FFF" />
+                  <Text style={styles.focusModeText}>Start Focus Mode</Text>
+                </TouchableOpacity>
+              )}
 
               <View style={styles.statsCard}>
                 <View style={styles.statItem}>
@@ -312,102 +349,6 @@ export default function PlannerScreen() {
     </View>
   );
 }
-
-interface TaskCardProps {
-  task: Task;
-  index: number;
-  onEdit: () => void;
-  onDelete: () => void;
-  onToggleComplete: () => void;
-}
-
-const TaskCard: React.FC<TaskCardProps> = ({ task, onEdit, onDelete, onToggleComplete }) => {
-  const scaleAnim = useRef(new Animated.Value(1)).current;
-  const config = CATEGORY_CONFIGS[task.category];
-  
-  const handlePressIn = () => {
-    Animated.spring(scaleAnim, {
-      toValue: 0.97,
-      useNativeDriver: true,
-    }).start();
-  };
-
-  const handlePressOut = () => {
-    Animated.spring(scaleAnim, {
-      toValue: 1,
-      friction: 3,
-      useNativeDriver: true,
-    }).start();
-  };
-
-  return (
-    <Animated.View style={[styles.taskCard, { transform: [{ scale: scaleAnim }] }]}>
-      <View style={[styles.taskColorBar, { backgroundColor: config.color }]} />
-      
-      <TouchableOpacity 
-        style={styles.checkboxContainer}
-        onPress={onToggleComplete}
-        activeOpacity={0.7}
-      >
-        <View style={[styles.checkbox, task.completed && { backgroundColor: config.color, borderColor: config.color }]}>
-          {task.completed && <Check size={16} color="#FFF" strokeWidth={3} />}
-        </View>
-      </TouchableOpacity>
-      
-      <View style={styles.taskContent}>
-        <View style={styles.taskHeader}>
-          <View style={[styles.categoryBadge, { backgroundColor: config.color + '25' }]}>
-            <Text style={[styles.categoryText, { color: config.color }]}>
-              {config.label}
-            </Text>
-          </View>
-          
-          <View style={styles.taskActions}>
-            <TouchableOpacity 
-              style={styles.actionButton}
-              onPress={onEdit}
-              onPressIn={handlePressIn}
-              onPressOut={handlePressOut}
-            >
-              <Edit2 size={16} color="#888" />
-            </TouchableOpacity>
-            <TouchableOpacity 
-              style={[styles.actionButton, styles.deleteButton]}
-              onPress={onDelete}
-            >
-              <Trash2 size={16} color="#C75B6E" />
-            </TouchableOpacity>
-          </View>
-        </View>
-
-        <Text 
-          style={[
-            styles.taskTitle, 
-            task.completed && styles.taskTitleCompleted
-          ]} 
-          numberOfLines={2}
-        >
-          {task.title}
-        </Text>
-
-        <View style={styles.taskMeta}>
-          <View style={styles.metaItem}>
-            <Clock size={13} color="#666" />
-            <Text style={styles.metaText}>{formatTimeFromMinutes(task.startTime)}</Text>
-          </View>
-          <View style={styles.metaDot} />
-          <Text style={styles.metaText}>{formatDuration(task.duration)}</Text>
-          {task.repeatType !== 'none' && (
-            <>
-              <View style={styles.metaDot} />
-              <Text style={styles.repeatBadge}>{task.repeatType}</Text>
-            </>
-          )}
-        </View>
-      </View>
-    </Animated.View>
-  );
-};
 
 const styles = StyleSheet.create({
   container: {
@@ -568,109 +509,7 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     borderRadius: 12,
   },
-  taskCard: {
-    flexDirection: 'row',
-    backgroundColor: '#1A1A2E',
-    borderRadius: 16,
-    overflow: 'hidden',
-    marginBottom: 10,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 8,
-  },
-  taskColorBar: {
-    width: 5,
-  },
-  checkboxContainer: {
-    paddingLeft: 14,
-    paddingTop: 14,
-    paddingRight: 4,
-  },
-  checkbox: {
-    width: 24,
-    height: 24,
-    borderRadius: 8,
-    borderWidth: 2,
-    borderColor: '#444',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  taskContent: {
-    flex: 1,
-    padding: 14,
-  },
-  taskHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 10,
-  },
-  categoryBadge: {
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 8,
-  },
-  categoryText: {
-    fontSize: 10,
-    fontWeight: '700',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
-  taskActions: {
-    flexDirection: 'row',
-    gap: 6,
-  },
-  actionButton: {
-    width: 28,
-    height: 28,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
-    borderRadius: 8,
-  },
-  deleteButton: {
-    backgroundColor: 'rgba(199, 91, 110, 0.15)',
-  },
-  taskTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#FFF',
-    marginBottom: 10,
-    lineHeight: 22,
-  },
-  taskTitleCompleted: {
-    textDecorationLine: 'line-through',
-    opacity: 0.5,
-  },
-  taskMeta: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  metaItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-  },
-  metaText: {
-    fontSize: 13,
-    color: '#888',
-    fontWeight: '500',
-  },
-  metaDot: {
-    width: 3,
-    height: 3,
-    borderRadius: 1.5,
-    backgroundColor: '#444',
-  },
-  repeatBadge: {
-    fontSize: 11,
-    color: '#8B7AC7',
-    fontWeight: '600',
-    textTransform: 'capitalize',
-  },
+
   statsCard: {
     flexDirection: 'row',
     backgroundColor: '#1A1A2E',
@@ -756,6 +595,26 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: '#888',
     lineHeight: 18,
+  },
+  focusModeButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#6B8ACF',
+    borderRadius: 14,
+    paddingVertical: 16,
+    gap: 8,
+    marginTop: 12,
+    shadowColor: '#6B8ACF',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 6,
+  },
+  focusModeText: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#FFF',
   },
   footer: {
     paddingHorizontal: 20,

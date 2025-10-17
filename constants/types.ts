@@ -2,6 +2,8 @@ export type TaskCategory = 'meeting' | 'working' | 'creative' | 'building' | 'fo
 
 export type RepeatType = 'none' | 'daily' | 'weekly' | 'monthly';
 
+export type TaskPriority = 'low' | 'medium' | 'high';
+
 export interface Task {
   id: string;
   title: string;
@@ -12,6 +14,9 @@ export interface Task {
   completed: boolean;
   repeatType: RepeatType;
   repeatEndDate?: string;
+  notes?: string;
+  priority?: TaskPriority;
+  order: number;
 }
 
 export interface CategoryConfig {

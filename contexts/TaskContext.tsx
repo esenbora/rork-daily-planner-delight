@@ -50,14 +50,18 @@ export const [TaskProvider, useTasks] = createContextHook(() => {
     }
   }, [tasks, isLoading, saveTasks]);
 
-  const addTask = useCallback((task: Omit<Task, 'id'>) => {
-    const newTask: Task = {
-      ...task,
-      id: Date.now().toString() + Math.random().toString(36).substring(2, 11),
-      completed: task.completed ?? false,
-      repeatType: task.repeatType ?? 'none',
-    };
-    setTasks(prev => [...prev, newTask]);
+  const addTask = useCallback((task: Omit<Task, 'id' | 'order'>) => {
+    setTasks(prev => {
+      const maxOrder = prev.length > 0 ? Math.max(...prev.map(t => t.order || 0)) : 0;
+      const newTask: Task = {
+        ...task,
+        id: Date.now().toString() + Math.random().toString(36).substring(2, 11),
+        completed: task.completed ?? false,
+        repeatType: task.repeatType ?? 'none',
+        order: maxOrder + 1,
+      };
+      return [...prev, newTask];
+    });
   }, []);
 
   const updateTask = useCallback((id: string, updates: Partial<Task>) => {
@@ -74,7 +78,14 @@ export const [TaskProvider, useTasks] = createContextHook(() => {
 
   const getTasksForDate = useCallback((date: Date): Task[] => {
     const dateStr = formatDate(date);
-    return tasks.filter(task => task.date === dateStr).sort((a, b) => a.startTime - b.startTime);
+    return tasks
+      .filter(task => task.date === dateStr)
+      .sort((a, b) => {
+        const orderA = a.order ?? 0;
+        const orderB = b.order ?? 0;
+        if (orderA !== orderB) return orderA - orderB;
+        return a.startTime - b.startTime;
+      });
   }, [tasks]);
 
   const selectedDateTasks = useMemo(() => {
@@ -87,6 +98,20 @@ export const [TaskProvider, useTasks] = createContextHook(() => {
 
   const markOnboardingComplete = useCallback(() => {
     setHasCompletedOnboarding(true);
+    AsyncStorage.setItem(ONBOARDING_COMPLETE_KEY, 'true');
+  }, []);
+
+  const reorderTasks = useCallback((taskIds: string[]) => {
+    setTasks(prev => {
+      const updated = [...prev];
+      taskIds.forEach((id, index) => {
+        const taskIndex = updated.findIndex(t => t.id === id);
+        if (taskIndex !== -1) {
+          updated[taskIndex] = { ...updated[taskIndex], order: index };
+        }
+      });
+      return updated;
+    });
   }, []);
 
   return {
@@ -103,5 +128,6 @@ export const [TaskProvider, useTasks] = createContextHook(() => {
     getTasksForDate,
     markOnboardingComplete,
     toggleTaskCompletion,
+    reorderTasks,
   };
 });
