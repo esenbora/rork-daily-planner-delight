@@ -170,8 +170,7 @@ export const TimeWheel: React.FC<TimeWheelProps> = ({ tasks, scheduledMinutes, d
               fontWeight="600"
               textAnchor="middle"
               alignmentBaseline="middle"
-              rotation={arc.labelAngle}
-              origin={`${arc.labelX}, ${arc.labelY}`}
+              transform={`rotate(${arc.labelAngle}, ${arc.labelX}, ${arc.labelY})`}
             >
               {arc.label}
             </SvgText>
