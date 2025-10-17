@@ -9,9 +9,12 @@ import {
   SafeAreaView,
   StatusBar,
 } from 'react-native';
-import { X } from 'lucide-react-native';
+import { X, Sparkles, Lock } from 'lucide-react-native';
+import { useRouter } from 'expo-router';
 import { useTasks } from '@/contexts/TaskContext';
+import { useSubscription } from '@/contexts/SubscriptionContext';
 import { TaskCategory, CATEGORY_CONFIGS } from '@/constants/types';
+import { TASK_TEMPLATES } from '@/constants/taskTemplates';
 import { formatDate } from '@/utils/dateHelpers';
 
 interface AddTaskModalProps {
@@ -20,7 +23,9 @@ interface AddTaskModalProps {
 }
 
 export const AddTaskModal: React.FC<AddTaskModalProps> = ({ selectedDate, onClose }) => {
+  const router = useRouter();
   const { addTask } = useTasks();
+  const { hasFeature } = useSubscription();
   const [title, setTitle] = useState<string>('');
   const [category, setCategory] = useState<TaskCategory>('meeting');
   const [startHour, setStartHour] = useState<number>(9);
@@ -63,6 +68,74 @@ export const AddTaskModal: React.FC<AddTaskModalProps> = ({ selectedDate, onClos
       </View>
 
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+        {hasFeature('taskTemplates') && (
+          <View style={styles.section}>
+            <View style={styles.labelRow}>
+              <Text style={styles.label}>Quick Templates</Text>
+              <Sparkles size={14} color="#4A9B9B" />
+            </View>
+            <ScrollView 
+              horizontal 
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.templatesScroll}
+            >
+              {TASK_TEMPLATES.map(template => {
+                const config = CATEGORY_CONFIGS[template.category];
+                return (
+                  <TouchableOpacity
+                    key={template.id}
+                    style={[
+                      styles.templateCard,
+                      { borderColor: config.color + '40' },
+                    ]}
+                    onPress={() => {
+                      setTitle(template.name);
+                      setCategory(template.category);
+                      setDuration(template.duration);
+                    }}
+                  >
+                    {template.isPremium && (
+                      <View style={styles.premiumTemplateBadge}>
+                        <Sparkles size={10} color="#FFD700" />
+                      </View>
+                    )}
+                    <Text style={styles.templateName}>{template.name}</Text>
+                    <Text style={styles.templateDescription}>{template.description}</Text>
+                    <View style={[styles.templateCategory, { backgroundColor: config.color + '30' }]}>
+                      <Text style={[styles.templateCategoryText, { color: config.color }]}>
+                        {config.label}
+                      </Text>
+                    </View>
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+          </View>
+        )}
+
+        {!hasFeature('taskTemplates') && (
+          <TouchableOpacity 
+            style={styles.section}
+            onPress={() => {
+              onClose();
+              router.push('/subscription');
+            }}
+          >
+            <View style={styles.premiumFeatureBanner}>
+              <View style={styles.premiumFeatureIcon}>
+                <Lock size={24} color="#FFD700" />
+              </View>
+              <View style={styles.premiumFeatureContent}>
+                <Text style={styles.premiumFeatureTitle}>Unlock Task Templates</Text>
+                <Text style={styles.premiumFeatureDescription}>
+                  Save time with pre-made templates
+                </Text>
+              </View>
+              <Sparkles size={20} color="#FFD700" />
+            </View>
+          </TouchableOpacity>
+        )}
+
         <View style={styles.section}>
           <Text style={styles.label}>Task Name</Text>
           <TextInput
@@ -231,6 +304,88 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
+  },
+  labelRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 12,
+  },
+  templatesScroll: {
+    gap: 12,
+    paddingRight: 20,
+  },
+  templateCard: {
+    width: 160,
+    backgroundColor: '#121212',
+    borderRadius: 12,
+    padding: 16,
+    borderWidth: 2,
+    position: 'relative',
+  },
+  premiumTemplateBadge: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    width: 20,
+    height: 20,
+    backgroundColor: '#FFD70030',
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  templateName: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#FFF',
+    marginBottom: 6,
+  },
+  templateDescription: {
+    fontSize: 12,
+    color: '#888',
+    marginBottom: 10,
+    lineHeight: 16,
+  },
+  templateCategory: {
+    alignSelf: 'flex-start',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+  },
+  templateCategoryText: {
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  premiumFeatureBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#121212',
+    borderRadius: 16,
+    padding: 20,
+    borderWidth: 2,
+    borderColor: '#FFD70040',
+  },
+  premiumFeatureIcon: {
+    width: 48,
+    height: 48,
+    backgroundColor: '#FFD70020',
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 16,
+  },
+  premiumFeatureContent: {
+    flex: 1,
+  },
+  premiumFeatureTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#FFF',
+    marginBottom: 4,
+  },
+  premiumFeatureDescription: {
+    fontSize: 13,
+    color: '#888',
   },
   input: {
     backgroundColor: '#121212',

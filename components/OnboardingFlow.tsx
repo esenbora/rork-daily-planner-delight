@@ -1,10 +1,11 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   TouchableOpacity,
   ScrollView,
+  Animated,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Clock, Target, Sparkles, ArrowRight } from 'lucide-react-native';
@@ -26,6 +27,8 @@ const ONBOARDING_COMPLETE_KEY = '@planner_onboarding_complete';
 export function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
   const insets = useSafeAreaInsets();
   const [currentStep, setCurrentStep] = useState<number>(0);
+  const fadeAnim = useRef(new Animated.Value(1)).current;
+  const slideAnim = useRef(new Animated.Value(0)).current;
 
   const steps: OnboardingStep[] = [
     {
@@ -50,11 +53,42 @@ export function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
 
   const handleNext = () => {
     if (currentStep < steps.length - 1) {
-      setCurrentStep(currentStep + 1);
+      Animated.parallel([
+        Animated.timing(fadeAnim, {
+          toValue: 0,
+          duration: 200,
+          useNativeDriver: true,
+        }),
+        Animated.timing(slideAnim, {
+          toValue: -50,
+          duration: 200,
+          useNativeDriver: true,
+        }),
+      ]).start(() => {
+        setCurrentStep(currentStep + 1);
+        slideAnim.setValue(50);
+        Animated.parallel([
+          Animated.timing(fadeAnim, {
+            toValue: 1,
+            duration: 300,
+            useNativeDriver: true,
+          }),
+          Animated.timing(slideAnim, {
+            toValue: 0,
+            duration: 300,
+            useNativeDriver: true,
+          }),
+        ]).start();
+      });
     } else {
       completeOnboarding();
     }
   };
+
+  useEffect(() => {
+    fadeAnim.setValue(1);
+    slideAnim.setValue(0);
+  }, [fadeAnim, slideAnim]);
 
   const handleSkip = () => {
     completeOnboarding();
@@ -104,7 +138,15 @@ export function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
         ]}
         showsVerticalScrollIndicator={false}
       >
-        <View style={styles.iconContainer}>
+        <Animated.View 
+          style={[
+            styles.iconContainer,
+            {
+              opacity: fadeAnim,
+              transform: [{ translateY: slideAnim }],
+            },
+          ]}
+        >
           <View
             style={[
               styles.iconCircle,
@@ -113,15 +155,31 @@ export function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
           >
             {currentStepData.icon}
           </View>
-        </View>
+        </Animated.View>
 
-        <View style={styles.textContainer}>
+        <Animated.View 
+          style={[
+            styles.textContainer,
+            {
+              opacity: fadeAnim,
+              transform: [{ translateY: slideAnim }],
+            },
+          ]}
+        >
           <Text style={styles.title}>{currentStepData.title}</Text>
           <Text style={styles.description}>{currentStepData.description}</Text>
-        </View>
+        </Animated.View>
 
         {currentStep === 0 && (
-          <View style={styles.painPoints}>
+          <Animated.View 
+            style={[
+              styles.painPoints,
+              {
+                opacity: fadeAnim,
+                transform: [{ translateY: slideAnim }],
+              },
+            ]}
+          >
             <PainPoint
               emoji="😰"
               text="Feeling like there's never enough time?"
@@ -137,11 +195,19 @@ export function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
               text="Ready to take back control?"
               color={currentStepData.accentColor}
             />
-          </View>
+          </Animated.View>
         )}
 
         {currentStep === 1 && (
-          <View style={styles.features}>
+          <Animated.View 
+            style={[
+              styles.features,
+              {
+                opacity: fadeAnim,
+                transform: [{ translateY: slideAnim }],
+              },
+            ]}
+          >
             <FeatureItem
               text="24-hour visual time wheel"
               color={currentStepData.accentColor}
@@ -154,11 +220,19 @@ export function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
               text="Real-time schedule tracking"
               color={currentStepData.accentColor}
             />
-          </View>
+          </Animated.View>
         )}
 
         {currentStep === 2 && (
-          <View style={styles.tipsContainer}>
+          <Animated.View 
+            style={[
+              styles.tipsContainer,
+              {
+                opacity: fadeAnim,
+                transform: [{ translateY: slideAnim }],
+              },
+            ]}
+          >
             <TipCard
               number="1"
               text="Add your morning routine first"
@@ -174,7 +248,7 @@ export function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
               text="Leave buffer time for flexibility"
               color={currentStepData.accentColor}
             />
-          </View>
+          </Animated.View>
         )}
       </ScrollView>
 

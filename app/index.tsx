@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import {
   View,
   Text,
@@ -7,10 +7,13 @@ import {
   StatusBar,
   ScrollView,
   Modal,
+  Animated,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { ChevronLeft, ChevronRight, Plus, List, Download } from 'lucide-react-native';
+import { ChevronLeft, ChevronRight, Plus, List, Crown } from 'lucide-react-native';
+import { useRouter } from 'expo-router';
 import { useTasks } from '@/contexts/TaskContext';
+import { useSubscription } from '@/contexts/SubscriptionContext';
 import { TimeWheel } from '@/components/TimeWheel';
 import { formatMonthDay, getDayName, addDays } from '@/utils/dateHelpers';
 import { AddTaskModal } from '@/components/AddTaskModal';
@@ -18,8 +21,13 @@ import { OnboardingFlow } from '@/components/OnboardingFlow';
 
 export default function PlannerScreen() {
   const insets = useSafeAreaInsets();
+  const router = useRouter();
   const { selectedDate, setSelectedDate, selectedDateTasks, scheduledMinutes, isLoading, hasCompletedOnboarding, markOnboardingComplete } = useTasks();
+  const { canAddMoreTasks, isPremium } = useSubscription();
   const [isAddModalVisible, setIsAddModalVisible] = useState<boolean>(false);
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const scaleAnim = useRef(new Animated.Value(0.95)).current;
+  const buttonScale = useRef(new Animated.Value(1)).current;
 
   const handlePreviousDay = () => {
     setSelectedDate(addDays(selectedDate, -1));
@@ -27,6 +35,46 @@ export default function PlannerScreen() {
 
   const handleNextDay = () => {
     setSelectedDate(addDays(selectedDate, 1));
+  };
+
+  React.useEffect(() => {
+    if (!isLoading && hasCompletedOnboarding) {
+      Animated.parallel([
+        Animated.timing(fadeAnim, {
+          toValue: 1,
+          duration: 600,
+          useNativeDriver: true,
+        }),
+        Animated.spring(scaleAnim, {
+          toValue: 1,
+          friction: 8,
+          tension: 40,
+          useNativeDriver: true,
+        }),
+      ]).start();
+    }
+  }, [isLoading, hasCompletedOnboarding, fadeAnim, scaleAnim]);
+
+  const handleAddButtonPress = () => {
+    if (!canAddMoreTasks(selectedDateTasks.length)) {
+      router.push('/subscription');
+      return;
+    }
+
+    Animated.sequence([
+      Animated.timing(buttonScale, {
+        toValue: 0.95,
+        duration: 100,
+        useNativeDriver: true,
+      }),
+      Animated.timing(buttonScale, {
+        toValue: 1,
+        duration: 100,
+        useNativeDriver: true,
+      }),
+    ]).start(() => {
+      setIsAddModalVisible(true);
+    });
   };
 
   if (isLoading) {
@@ -65,8 +113,13 @@ export default function PlannerScreen() {
           </TouchableOpacity>
         </View>
         
-        <TouchableOpacity style={styles.iconButton}>
-          <Download color="#FFF" size={20} />
+        <TouchableOpacity 
+          style={styles.iconButton}
+          onPress={() => router.push('/subscription')}
+        >
+          <View style={styles.premiumBadge}>
+            <Crown color="#FFD700" size={20} fill={isPremium ? "#FFD700" : "none"} />
+          </View>
         </TouchableOpacity>
       </View>
 
@@ -75,15 +128,30 @@ export default function PlannerScreen() {
         contentContainerStyle={styles.contentContainer}
         showsVerticalScrollIndicator={false}
       >
-        <View style={styles.wheelContainer}>
+        <Animated.View 
+          style={[
+            styles.wheelContainer,
+            {
+              opacity: fadeAnim,
+              transform: [{ scale: scaleAnim }],
+            },
+          ]}
+        >
           <TimeWheel 
             tasks={selectedDateTasks} 
             scheduledMinutes={scheduledMinutes}
             dayName={getDayName(selectedDate)}
           />
-        </View>
+        </Animated.View>
 
-        <View style={styles.statsContainer}>
+        <Animated.View 
+          style={[
+            styles.statsContainer,
+            {
+              opacity: fadeAnim,
+            },
+          ]}
+        >
           <View style={styles.statItem}>
             <Text style={styles.statValue}>{selectedDateTasks.length}</Text>
             <Text style={styles.statLabel}>Tasks</Text>
@@ -98,17 +166,37 @@ export default function PlannerScreen() {
             <Text style={styles.statValue}>{Math.round((1440 - scheduledMinutes) / 60)}h</Text>
             <Text style={styles.statLabel}>Free</Text>
           </View>
-        </View>
+        </Animated.View>
+
+        {!isPremium && selectedDateTasks.length >= 3 && (
+          <TouchableOpacity 
+            style={styles.upgradeCard}
+            onPress={() => router.push('/subscription')}
+          >
+            <View style={styles.upgradeIconContainer}>
+              <Crown size={32} color="#FFD700" fill="#FFD700" />
+            </View>
+            <View style={styles.upgradeContent}>
+              <Text style={styles.upgradeTitle}>Unlock Premium</Text>
+              <Text style={styles.upgradeDescription}>
+                Get unlimited tasks, templates, analytics & more
+              </Text>
+            </View>
+            <ChevronRight color="#FFD700" size={24} />
+          </TouchableOpacity>
+        )}
       </ScrollView>
 
       <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom, 16) }]}>
-        <TouchableOpacity 
-          style={styles.addButton}
-          onPress={() => setIsAddModalVisible(true)}
-        >
-          <Plus color="#0A0A0A" size={20} strokeWidth={2.5} />
-          <Text style={styles.addButtonText}>New Task</Text>
-        </TouchableOpacity>
+        <Animated.View style={{ transform: [{ scale: buttonScale }] }}>
+          <TouchableOpacity 
+            style={styles.addButton}
+            onPress={handleAddButtonPress}
+          >
+            <Plus color="#0A0A0A" size={20} strokeWidth={2.5} />
+            <Text style={styles.addButtonText}>New Task</Text>
+          </TouchableOpacity>
+        </Animated.View>
       </View>
 
       <Modal
@@ -171,6 +259,12 @@ const styles = StyleSheet.create({
     backgroundColor: '#1A1A1A',
     borderRadius: 8,
   },
+  premiumBadge: {
+    width: 40,
+    height: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   dateInfo: {
     alignItems: 'center',
     minWidth: 80,
@@ -221,6 +315,40 @@ const styles = StyleSheet.create({
     width: 1,
     height: 40,
     backgroundColor: '#1A1A1A',
+  },
+  upgradeCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#121212',
+    borderRadius: 20,
+    padding: 20,
+    marginHorizontal: 20,
+    marginTop: 24,
+    borderWidth: 2,
+    borderColor: '#FFD70040',
+  },
+  upgradeIconContainer: {
+    width: 56,
+    height: 56,
+    backgroundColor: '#FFD70020',
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 16,
+  },
+  upgradeContent: {
+    flex: 1,
+  },
+  upgradeTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#FFF',
+    marginBottom: 4,
+  },
+  upgradeDescription: {
+    fontSize: 14,
+    color: '#888',
+    lineHeight: 20,
   },
   footer: {
     paddingHorizontal: 20,
