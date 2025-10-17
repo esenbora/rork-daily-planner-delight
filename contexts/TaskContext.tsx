@@ -54,12 +54,18 @@ export const [TaskProvider, useTasks] = createContextHook(() => {
     const newTask: Task = {
       ...task,
       id: Date.now().toString() + Math.random().toString(36).substring(2, 11),
+      completed: task.completed ?? false,
+      repeatType: task.repeatType ?? 'none',
     };
     setTasks(prev => [...prev, newTask]);
   }, []);
 
   const updateTask = useCallback((id: string, updates: Partial<Task>) => {
     setTasks(prev => prev.map(task => task.id === id ? { ...task, ...updates } : task));
+  }, []);
+
+  const toggleTaskCompletion = useCallback((id: string) => {
+    setTasks(prev => prev.map(task => task.id === id ? { ...task, completed: !task.completed } : task));
   }, []);
 
   const deleteTask = useCallback((id: string) => {
@@ -96,5 +102,6 @@ export const [TaskProvider, useTasks] = createContextHook(() => {
     deleteTask,
     getTasksForDate,
     markOnboardingComplete,
+    toggleTaskCompletion,
   };
 });

@@ -34,3 +34,24 @@ export const formatDuration = (minutes: number): string => {
     return `${mins}m`;
   }
 };
+
+export const getWeekStart = (date: Date): Date => {
+  const result = new Date(date);
+  const day = result.getDay();
+  const diff = result.getDate() - day;
+  result.setDate(diff);
+  result.setHours(0, 0, 0, 0);
+  return result;
+};
+
+export const getWeekDays = (weekStart: Date): Date[] => {
+  const days: Date[] = [];
+  for (let i = 0; i < 7; i++) {
+    days.push(addDays(weekStart, i));
+  }
+  return days;
+};
+
+export const getShortDayName = (date: Date): string => {
+  return date.toLocaleDateString('en-US', { weekday: 'short' }).toUpperCase();
+};

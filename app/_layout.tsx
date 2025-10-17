@@ -12,6 +12,8 @@ function RootLayoutNav() {
     <Stack screenOptions={{ headerShown: false }}>
       <Stack.Screen name="index" />
       <Stack.Screen name="subscription" options={{ presentation: 'modal' }} />
+      <Stack.Screen name="weekly" options={{ presentation: 'modal' }} />
+      <Stack.Screen name="statistics" options={{ presentation: 'modal' }} />
       <Stack.Screen name="+not-found" />
     </Stack>
   );

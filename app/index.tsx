@@ -10,7 +10,7 @@ import {
   Animated,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { ChevronLeft, ChevronRight, Plus, Crown, Clock, Edit2, Trash2, Calendar } from 'lucide-react-native';
+import { ChevronLeft, ChevronRight, Plus, Crown, Clock, Edit2, Trash2, Calendar, Check, CalendarDays, BarChart3 } from 'lucide-react-native';
 import { useRouter } from 'expo-router';
 import { useTasks } from '@/contexts/TaskContext';
 import { useSubscription } from '@/contexts/SubscriptionContext';
@@ -23,7 +23,7 @@ import { Task, CATEGORY_CONFIGS } from '@/constants/types';
 export default function PlannerScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { selectedDate, setSelectedDate, selectedDateTasks, scheduledMinutes, isLoading, hasCompletedOnboarding, markOnboardingComplete, deleteTask } = useTasks();
+  const { selectedDate, setSelectedDate, selectedDateTasks, scheduledMinutes, isLoading, hasCompletedOnboarding, markOnboardingComplete, deleteTask, toggleTaskCompletion } = useTasks();
   const { canAddMoreTasks, isPremium } = useSubscription();
   const [isAddModalVisible, setIsAddModalVisible] = useState<boolean>(false);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
@@ -151,7 +151,20 @@ export default function PlannerScreen() {
           </TouchableOpacity>
         </View>
         
-        <View style={styles.iconButton} />
+        <View style={styles.headerActions}>
+          <TouchableOpacity 
+            style={styles.iconButton}
+            onPress={() => router.push('/weekly')}
+          >
+            <CalendarDays color="#FFF" size={20} />
+          </TouchableOpacity>
+          <TouchableOpacity 
+            style={styles.iconButton}
+            onPress={() => router.push('/statistics')}
+          >
+            <BarChart3 color="#FFF" size={20} />
+          </TouchableOpacity>
+        </View>
       </View>
 
       <ScrollView 
@@ -218,6 +231,7 @@ export default function PlannerScreen() {
                   index={index}
                   onEdit={() => handleEditTask(task)}
                   onDelete={() => deleteTask(task.id)}
+                  onToggleComplete={() => toggleTaskCompletion(task.id)}
                 />
               ))}
 
@@ -304,9 +318,10 @@ interface TaskCardProps {
   index: number;
   onEdit: () => void;
   onDelete: () => void;
+  onToggleComplete: () => void;
 }
 
-const TaskCard: React.FC<TaskCardProps> = ({ task, onEdit, onDelete }) => {
+const TaskCard: React.FC<TaskCardProps> = ({ task, onEdit, onDelete, onToggleComplete }) => {
   const scaleAnim = useRef(new Animated.Value(1)).current;
   const config = CATEGORY_CONFIGS[task.category];
   
@@ -328,6 +343,16 @@ const TaskCard: React.FC<TaskCardProps> = ({ task, onEdit, onDelete }) => {
   return (
     <Animated.View style={[styles.taskCard, { transform: [{ scale: scaleAnim }] }]}>
       <View style={[styles.taskColorBar, { backgroundColor: config.color }]} />
+      
+      <TouchableOpacity 
+        style={styles.checkboxContainer}
+        onPress={onToggleComplete}
+        activeOpacity={0.7}
+      >
+        <View style={[styles.checkbox, task.completed && { backgroundColor: config.color, borderColor: config.color }]}>
+          {task.completed && <Check size={16} color="#FFF" strokeWidth={3} />}
+        </View>
+      </TouchableOpacity>
       
       <View style={styles.taskContent}>
         <View style={styles.taskHeader}>
@@ -355,7 +380,15 @@ const TaskCard: React.FC<TaskCardProps> = ({ task, onEdit, onDelete }) => {
           </View>
         </View>
 
-        <Text style={styles.taskTitle} numberOfLines={2}>{task.title}</Text>
+        <Text 
+          style={[
+            styles.taskTitle, 
+            task.completed && styles.taskTitleCompleted
+          ]} 
+          numberOfLines={2}
+        >
+          {task.title}
+        </Text>
 
         <View style={styles.taskMeta}>
           <View style={styles.metaItem}>
@@ -364,6 +397,12 @@ const TaskCard: React.FC<TaskCardProps> = ({ task, onEdit, onDelete }) => {
           </View>
           <View style={styles.metaDot} />
           <Text style={styles.metaText}>{formatDuration(task.duration)}</Text>
+          {task.repeatType !== 'none' && (
+            <>
+              <View style={styles.metaDot} />
+              <Text style={styles.repeatBadge}>{task.repeatType}</Text>
+            </>
+          )}
         </View>
       </View>
     </Animated.View>
@@ -373,7 +412,7 @@ const TaskCard: React.FC<TaskCardProps> = ({ task, onEdit, onDelete }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#0A0A0A',
+    backgroundColor: '#1A1A2E',
   },
   loadingContainer: {
     alignItems: 'center',
@@ -385,6 +424,7 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     backgroundColor: '#1A1A2E',
+    zIndex: 0,
   },
   header: {
     flexDirection: 'row',
@@ -399,6 +439,10 @@ const styles = StyleSheet.create({
     height: 40,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  headerActions: {
+    flexDirection: 'row',
+    gap: 8,
   },
   dateSelector: {
     flexDirection: 'row',
@@ -539,6 +583,20 @@ const styles = StyleSheet.create({
   taskColorBar: {
     width: 5,
   },
+  checkboxContainer: {
+    paddingLeft: 14,
+    paddingTop: 14,
+    paddingRight: 4,
+  },
+  checkbox: {
+    width: 24,
+    height: 24,
+    borderRadius: 8,
+    borderWidth: 2,
+    borderColor: '#444',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   taskContent: {
     flex: 1,
     padding: 14,
@@ -582,6 +640,10 @@ const styles = StyleSheet.create({
     marginBottom: 10,
     lineHeight: 22,
   },
+  taskTitleCompleted: {
+    textDecorationLine: 'line-through',
+    opacity: 0.5,
+  },
   taskMeta: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -602,6 +664,12 @@ const styles = StyleSheet.create({
     height: 3,
     borderRadius: 1.5,
     backgroundColor: '#444',
+  },
+  repeatBadge: {
+    fontSize: 11,
+    color: '#8B7AC7',
+    fontWeight: '600',
+    textTransform: 'capitalize',
   },
   statsCard: {
     flexDirection: 'row',

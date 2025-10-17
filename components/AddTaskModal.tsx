@@ -9,11 +9,11 @@ import {
   SafeAreaView,
   StatusBar,
 } from 'react-native';
-import { X, Sparkles, Lock } from 'lucide-react-native';
+import { X, Sparkles, Lock, Repeat } from 'lucide-react-native';
 import { useRouter } from 'expo-router';
 import { useTasks } from '@/contexts/TaskContext';
 import { useSubscription } from '@/contexts/SubscriptionContext';
-import { Task, TaskCategory, CATEGORY_CONFIGS } from '@/constants/types';
+import { Task, TaskCategory, CATEGORY_CONFIGS, RepeatType } from '@/constants/types';
 import { TASK_TEMPLATES } from '@/constants/taskTemplates';
 import { formatDate } from '@/utils/dateHelpers';
 
@@ -32,6 +32,7 @@ export const AddTaskModal: React.FC<AddTaskModalProps> = ({ selectedDate, editin
   const [startHour, setStartHour] = useState<number>(editingTask ? Math.floor(editingTask.startTime / 60) : 9);
   const [startMinute, setStartMinute] = useState<number>(editingTask ? editingTask.startTime % 60 : 0);
   const [duration, setDuration] = useState<number>(editingTask?.duration || 60);
+  const [repeatType, setRepeatType] = useState<RepeatType>(editingTask?.repeatType || 'none');
 
   const handleSave = () => {
     if (!title.trim()) {
@@ -46,6 +47,7 @@ export const AddTaskModal: React.FC<AddTaskModalProps> = ({ selectedDate, editin
         category,
         startTime,
         duration,
+        repeatType,
       });
     } else {
       addTask({
@@ -54,6 +56,8 @@ export const AddTaskModal: React.FC<AddTaskModalProps> = ({ selectedDate, editin
         startTime,
         duration,
         date: formatDate(selectedDate),
+        completed: false,
+        repeatType,
       });
     }
 
@@ -62,6 +66,12 @@ export const AddTaskModal: React.FC<AddTaskModalProps> = ({ selectedDate, editin
 
   const categories: TaskCategory[] = ['meeting', 'working', 'creative', 'building', 'focus', 'personal'];
   const durationOptions = [15, 30, 45, 60, 90, 120, 180, 240];
+  const repeatOptions: { value: RepeatType; label: string }[] = [
+    { value: 'none', label: 'No Repeat' },
+    { value: 'daily', label: 'Daily' },
+    { value: 'weekly', label: 'Weekly' },
+    { value: 'monthly', label: 'Monthly' },
+  ];
 
   return (
     <SafeAreaView style={styles.container}>
@@ -255,6 +265,37 @@ export const AddTaskModal: React.FC<AddTaskModalProps> = ({ selectedDate, editin
                     ]}
                   >
                     {label}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        </View>
+
+        <View style={styles.section}>
+          <View style={styles.labelRow}>
+            <Text style={styles.label}>Repeat</Text>
+            <Repeat size={14} color="#8B7AC7" />
+          </View>
+          <View style={styles.repeatGrid}>
+            {repeatOptions.map(opt => {
+              const isSelected = repeatType === opt.value;
+              return (
+                <TouchableOpacity
+                  key={opt.value}
+                  style={[
+                    styles.repeatButton,
+                    isSelected && styles.repeatButtonSelected,
+                  ]}
+                  onPress={() => setRepeatType(opt.value)}
+                >
+                  <Text
+                    style={[
+                      styles.repeatText,
+                      isSelected && styles.repeatTextSelected,
+                    ]}
+                  >
+                    {opt.label}
                   </Text>
                 </TouchableOpacity>
               );
@@ -505,6 +546,31 @@ const styles = StyleSheet.create({
     color: '#666',
   },
   durationTextSelected: {
+    color: '#FFF',
+  },
+  repeatGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+  },
+  repeatButton: {
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 10,
+    backgroundColor: '#121212',
+    borderWidth: 2,
+    borderColor: '#1A1A1A',
+  },
+  repeatButtonSelected: {
+    backgroundColor: '#8B7AC7',
+    borderColor: '#8B7AC7',
+  },
+  repeatText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#666',
+  },
+  repeatTextSelected: {
     color: '#FFF',
   },
 });
