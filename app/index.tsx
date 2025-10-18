@@ -353,7 +353,7 @@ export default function PlannerScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#1A1A2E',
+    backgroundColor: '#000000',
   },
   loadingContainer: {
     alignItems: 'center',
@@ -364,26 +364,33 @@ const styles = StyleSheet.create({
     top: 0,
     left: 0,
     right: 0,
-    backgroundColor: '#1A1A2E',
+    backgroundColor: '#000000',
     zIndex: 0,
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    justifyContent: 'center',
     paddingHorizontal: 20,
     paddingVertical: 20,
     zIndex: 10,
+    position: 'relative' as const,
   },
   iconButton: {
     width: 40,
     height: 40,
     alignItems: 'center',
     justifyContent: 'center',
+    position: 'absolute' as const,
+    left: 20,
+    top: 20,
   },
   headerActions: {
     flexDirection: 'row',
     gap: 8,
+    position: 'absolute' as const,
+    right: 20,
+    top: 20,
   },
   dateSelector: {
     flexDirection: 'row',
@@ -512,7 +519,7 @@ const styles = StyleSheet.create({
 
   statsCard: {
     flexDirection: 'row',
-    backgroundColor: '#1A1A2E',
+    backgroundColor: '#0A0A0A',
     borderRadius: 18,
     padding: 20,
     marginTop: 12,
@@ -560,7 +567,7 @@ const styles = StyleSheet.create({
   upgradeCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#1A1A2E',
+    backgroundColor: '#0A0A0A',
     borderRadius: 20,
     padding: 20,
     marginTop: 20,
