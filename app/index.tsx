@@ -157,9 +157,7 @@ export default function PlannerScreen() {
           style={styles.iconButton}
           onPress={() => router.push('/subscription')}
         >
-          <View style={styles.premiumBadge}>
-            <Crown color="#FFD700" size={20} fill={isPremium ? "#FFD700" : "none"} />
-          </View>
+          <Crown color="#FFD700" size={20} fill={isPremium ? "#FFD700" : "none"} />
         </TouchableOpacity>
         
         <View style={styles.dateSelector}>
@@ -370,27 +368,20 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
+    justifyContent: 'space-between',
     paddingHorizontal: 20,
     paddingVertical: 20,
     zIndex: 10,
-    position: 'relative' as const,
   },
   iconButton: {
     width: 40,
     height: 40,
     alignItems: 'center',
     justifyContent: 'center',
-    position: 'absolute' as const,
-    left: 20,
-    top: 20,
   },
   headerActions: {
     flexDirection: 'row',
     gap: 8,
-    position: 'absolute' as const,
-    right: 20,
-    top: 20,
   },
   dateSelector: {
     flexDirection: 'row',
@@ -405,12 +396,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255, 255, 255, 0.1)',
     borderRadius: 10,
   },
-  premiumBadge: {
-    width: 40,
-    height: 40,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
+
   dateInfo: {
     alignItems: 'center',
     minWidth: 120,
