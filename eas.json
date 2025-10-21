@@ -8,9 +8,6 @@
       "developmentClient": true,
       "distribution": "internal",
       "node": "22.11.0",
-      "npm": {
-        "cache": true
-      },
       "ios": {
         "resourceClass": "m-medium",
         "simulator": true
@@ -22,9 +19,6 @@
     "preview": {
       "distribution": "internal",
       "node": "22.11.0",
-      "npm": {
-        "cache": true
-      },
       "ios": {
         "resourceClass": "m-medium",
         "simulator": false
@@ -36,9 +30,6 @@
     "production": {
       "autoIncrement": true,
       "node": "22.11.0",
-      "npm": {
-        "cache": true
-      },
       "ios": {
         "resourceClass": "m-medium",
         "simulator": false
