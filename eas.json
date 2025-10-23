@@ -28,6 +28,7 @@
       }
     },
     "production": {
+      "distribution": "store",
       "autoIncrement": true,
       "node": "22.11.0",
       "ios": {
