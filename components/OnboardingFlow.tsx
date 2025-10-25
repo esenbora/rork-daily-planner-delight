@@ -7,52 +7,55 @@ import {
   ScrollView,
   Animated,
 } from 'react-native';
+import { Image } from 'expo-image';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Clock, Target, Sparkles, ArrowRight } from 'lucide-react-native';
+import { Clock, Target, Sparkles, ArrowRight, TrendingUp } from 'lucide-react-native';
+// import Slider from '@react-native-community/slider'; // TEMPORARILY DISABLED FOR BUILD
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as Haptics from 'expo-haptics';
+import { OnboardingTaskForm } from './OnboardingTaskForm';
+import { OnboardingMiniWheel } from './OnboardingMiniWheel';
+import { CATEGORY_CONFIGS, type TaskCategory } from '@/constants/types';
 
 interface OnboardingFlowProps {
-  onComplete: () => void;
+  onComplete: (firstTask?: OnboardingTask) => void;
 }
 
-interface OnboardingStep {
-  icon: React.ReactNode;
+interface OnboardingTask {
   title: string;
-  description: string;
-  accentColor: string;
+  category: TaskCategory;
+  startHour: number;
+  startMinute: number;
+  duration: number;
 }
 
 const ONBOARDING_COMPLETE_KEY = '@planner_onboarding_complete';
+const ONBOARDING_GOAL_KEY = '@planner_daily_goal';
 
 export function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
   const insets = useSafeAreaInsets();
   const [currentStep, setCurrentStep] = useState<number>(0);
+  const [firstTask, setFirstTask] = useState<OnboardingTask | undefined>();
+  const [dailyGoalHours, setDailyGoalHours] = useState<number>(6);
   const fadeAnim = useRef(new Animated.Value(1)).current;
   const slideAnim = useRef(new Animated.Value(0)).current;
+  const scaleAnim = useRef(new Animated.Value(1)).current;
 
-  const steps: OnboardingStep[] = [
-    {
-      icon: <Clock size={64} color="#4A9B9B" strokeWidth={1.5} />,
-      title: "Take Control of Your Time",
-      description: "Feeling overwhelmed? Your day doesn't have to be chaotic. Let's build a routine that actually works for you.",
-      accentColor: '#4A9B9B',
-    },
-    {
-      icon: <Target size={64} color="#C75B6E" strokeWidth={1.5} />,
-      title: "Visualize Your Day",
-      description: "See your entire day at a glance with our beautiful time wheel. Know exactly where your time goes and find balance.",
-      accentColor: '#C75B6E',
-    },
-    {
-      icon: <Sparkles size={64} color="#8B7AC7" strokeWidth={1.5} />,
-      title: "Start Small, Build Big",
-      description: "You don't need to plan everything at once. Start with your most important tasks and grow from there.",
-      accentColor: '#8B7AC7',
-    },
-  ];
+  useEffect(() => {
+    fadeAnim.setValue(1);
+    slideAnim.setValue(0);
+    scaleAnim.setValue(1);
+  }, [fadeAnim, slideAnim, scaleAnim]);
 
   const handleNext = () => {
-    if (currentStep < steps.length - 1) {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+
+    // Don't allow continuing step 2 without adding a task
+    if (currentStep === 1 && !firstTask) {
+      return;
+    }
+
+    if (currentStep < 4) {
       Animated.parallel([
         Animated.timing(fadeAnim, {
           toValue: 0,
@@ -85,49 +88,58 @@ export function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
     }
   };
 
-  useEffect(() => {
-    fadeAnim.setValue(1);
-    slideAnim.setValue(0);
-  }, [fadeAnim, slideAnim]);
+  const handleTaskAdded = (task: OnboardingTask) => {
+    setFirstTask(task);
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
 
-  const handleSkip = () => {
-    completeOnboarding();
+    // Celebration animation
+    Animated.sequence([
+      Animated.timing(scaleAnim, {
+        toValue: 1.05,
+        duration: 150,
+        useNativeDriver: true,
+      }),
+      Animated.timing(scaleAnim, {
+        toValue: 1,
+        duration: 150,
+        useNativeDriver: true,
+      }),
+    ]).start();
+
+    // Auto-advance after a moment
+    setTimeout(() => {
+      handleNext();
+    }, 800);
   };
 
   const completeOnboarding = async () => {
     try {
-      await AsyncStorage.setItem(ONBOARDING_COMPLETE_KEY, 'true');
-      onComplete();
+      await AsyncStorage.multiSet([
+        [ONBOARDING_COMPLETE_KEY, 'true'],
+        [ONBOARDING_GOAL_KEY, dailyGoalHours.toString()],
+      ]);
+      onComplete(firstTask);
     } catch (error) {
       console.error('Failed to save onboarding status:', error);
-      onComplete();
+      onComplete(firstTask);
     }
   };
-
-  const currentStepData = steps[currentStep];
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
       <View style={styles.header}>
         <View style={styles.dotsContainer}>
-          {steps.map((_, index) => (
+          {[0, 1, 2, 3, 4].map((index) => (
             <View
               key={index}
               style={[
                 styles.dot,
-                index === currentStep && {
-                  backgroundColor: currentStepData.accentColor,
-                  width: 24,
-                },
+                index === currentStep && styles.dotActive,
+                index < currentStep && styles.dotCompleted,
               ]}
             />
           ))}
         </View>
-        {currentStep < steps.length - 1 && (
-          <TouchableOpacity onPress={handleSkip} style={styles.skipButton}>
-            <Text style={styles.skipText}>Skip</Text>
-          </TouchableOpacity>
-        )}
       </View>
 
       <ScrollView
@@ -138,116 +150,171 @@ export function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
         ]}
         showsVerticalScrollIndicator={false}
       >
-        <Animated.View 
-          style={[
-            styles.iconContainer,
-            {
-              opacity: fadeAnim,
-              transform: [{ translateY: slideAnim }],
-            },
-          ]}
-        >
-          <View
-            style={[
-              styles.iconCircle,
-              { backgroundColor: currentStepData.accentColor + '15' },
-            ]}
-          >
-            {currentStepData.icon}
-          </View>
-        </Animated.View>
-
-        <Animated.View 
-          style={[
-            styles.textContainer,
-            {
-              opacity: fadeAnim,
-              transform: [{ translateY: slideAnim }],
-            },
-          ]}
-        >
-          <Text style={styles.title}>{currentStepData.title}</Text>
-          <Text style={styles.description}>{currentStepData.description}</Text>
-        </Animated.View>
-
         {currentStep === 0 && (
-          <Animated.View 
+          <Animated.View
             style={[
-              styles.painPoints,
+              styles.stepContainer,
               {
                 opacity: fadeAnim,
                 transform: [{ translateY: slideAnim }],
               },
             ]}
           >
-            <PainPoint
-              emoji="😰"
-              text="Feeling like there's never enough time?"
-              color={currentStepData.accentColor}
-            />
-            <PainPoint
-              emoji="🔄"
-              text="Stuck in an endless cycle of chaos?"
-              color={currentStepData.accentColor}
-            />
-            <PainPoint
-              emoji="💪"
-              text="Ready to take back control?"
-              color={currentStepData.accentColor}
-            />
+            <View style={styles.appIconContainer}>
+              <Image
+                source={require('@/assets/images/icon.png')}
+                style={styles.appIcon}
+                contentFit="contain"
+              />
+            </View>
+            <Text style={styles.title}>Welcome to Chronos</Text>
+            <Text style={styles.description}>
+              Your personal time companion. Visualize your day on an elegant wheel and take control of your time.
+            </Text>
+            <View style={styles.featureList}>
+              <FeatureItem text="Beautiful 24-hour time wheel" />
+              <FeatureItem text="Smart task planning with AI" />
+              <FeatureItem text="Track your productivity streaks" />
+            </View>
           </Animated.View>
         )}
 
         {currentStep === 1 && (
-          <Animated.View 
+          <Animated.View
             style={[
-              styles.features,
+              styles.stepContainer,
               {
                 opacity: fadeAnim,
                 transform: [{ translateY: slideAnim }],
               },
             ]}
           >
-            <FeatureItem
-              text="24-hour visual time wheel"
-              color={currentStepData.accentColor}
-            />
-            <FeatureItem
-              text="Color-coded task categories"
-              color={currentStepData.accentColor}
-            />
-            <FeatureItem
-              text="Real-time schedule tracking"
-              color={currentStepData.accentColor}
-            />
+            <View style={[styles.iconCircle, { backgroundColor: 'rgba(0, 217, 163, 0.15)' }]}>
+              <Target size={64} color="#00D9A3" strokeWidth={1.5} />
+            </View>
+            <Text style={styles.title}>Add Your First Task</Text>
+            <Text style={styles.description}>
+              Let's start with something you want to accomplish today.
+            </Text>
+            <OnboardingTaskForm onTaskAdded={handleTaskAdded} />
           </Animated.View>
         )}
 
-        {currentStep === 2 && (
-          <Animated.View 
+        {currentStep === 2 && firstTask && (
+          <Animated.View
             style={[
-              styles.tipsContainer,
+              styles.stepContainer,
+              {
+                opacity: fadeAnim,
+                transform: [{ translateY: slideAnim }, { scale: scaleAnim }],
+              },
+            ]}
+          >
+            <Text style={styles.title}>See It on the Wheel</Text>
+            <Text style={styles.description}>
+              Your task appears on the time wheel. This is how you'll visualize your entire day.
+            </Text>
+            <View style={styles.wheelPreview}>
+              <OnboardingMiniWheel task={firstTask} />
+            </View>
+            <View style={styles.taskCard}>
+              <View
+                style={[
+                  styles.taskDot,
+                  { backgroundColor: CATEGORY_CONFIGS[firstTask.category].color },
+                ]}
+              />
+              <View style={styles.taskInfo}>
+                <Text style={styles.taskTitle}>{firstTask.title}</Text>
+                <Text style={styles.taskTime}>
+                  {String(firstTask.startHour).padStart(2, '0')}:
+                  {String(firstTask.startMinute).padStart(2, '0')} • {firstTask.duration}min
+                </Text>
+              </View>
+            </View>
+          </Animated.View>
+        )}
+
+        {currentStep === 3 && (
+          <Animated.View
+            style={[
+              styles.stepContainer,
               {
                 opacity: fadeAnim,
                 transform: [{ translateY: slideAnim }],
               },
             ]}
           >
-            <TipCard
-              number="1"
-              text="Add your morning routine first"
-              color={currentStepData.accentColor}
-            />
-            <TipCard
-              number="2"
-              text="Block time for your priorities"
-              color={currentStepData.accentColor}
-            />
-            <TipCard
-              number="3"
-              text="Leave buffer time for flexibility"
-              color={currentStepData.accentColor}
-            />
+            <View style={[styles.iconCircle, { backgroundColor: 'rgba(0, 217, 163, 0.15)' }]}>
+              <Sparkles size={64} color="#00D9A3" strokeWidth={1.5} />
+            </View>
+            <Text style={styles.title}>Color-Coded Categories</Text>
+            <Text style={styles.description}>
+              Organize your tasks with beautiful categories. Unlock unlimited custom categories with Premium!
+            </Text>
+            <View style={styles.categoryGrid}>
+              {(Object.keys(CATEGORY_CONFIGS) as TaskCategory[]).map((cat) => {
+                const config = CATEGORY_CONFIGS[cat];
+                return (
+                  <View key={cat} style={styles.categoryCard}>
+                    <View
+                      style={[
+                        styles.categoryCircle,
+                        { backgroundColor: config.color },
+                      ]}
+                    />
+                    <Text style={styles.categoryName}>{config.label}</Text>
+                  </View>
+                );
+              })}
+            </View>
+          </Animated.View>
+        )}
+
+        {currentStep === 4 && (
+          <Animated.View
+            style={[
+              styles.stepContainer,
+              {
+                opacity: fadeAnim,
+                transform: [{ translateY: slideAnim }],
+              },
+            ]}
+          >
+            <View style={[styles.iconCircle, { backgroundColor: 'rgba(255, 215, 0, 0.15)' }]}>
+              <TrendingUp size={64} color="#FFD700" strokeWidth={1.5} />
+            </View>
+            <Text style={styles.title}>Set Your Daily Goal</Text>
+            <Text style={styles.description}>
+              How many hours would you like to dedicate to productive tasks? Track your progress with Premium Analytics!
+            </Text>
+            <View style={styles.goalSection}>
+              <Text style={styles.goalValue}>{dailyGoalHours} hours</Text>
+              {/* TEMPORARILY DISABLED SLIDER FOR BUILD - Replace with alternative UI */}
+              {/* <Slider
+                style={styles.slider}
+                minimumValue={2}
+                maximumValue={12}
+                step={1}
+                value={dailyGoalHours}
+                onValueChange={(value) => {
+                  setDailyGoalHours(value);
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                }}
+                minimumTrackTintColor="#00D9A3"
+                maximumTrackTintColor="#333"
+                thumbTintColor="#00D9A3"
+              /> */}
+              {/* <View style={styles.sliderLabels}>
+                <Text style={styles.sliderLabel}>2h</Text>
+                <Text style={styles.sliderLabel}>12h</Text>
+              </View> */}
+            </View>
+            <View style={styles.goalTip}>
+              <Text style={styles.goalTipText}>
+                💡 You can always adjust this later in settings
+              </Text>
+            </View>
           </Animated.View>
         )}
       </ScrollView>
@@ -261,12 +328,13 @@ export function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
         <TouchableOpacity
           style={[
             styles.nextButton,
-            { backgroundColor: currentStepData.accentColor },
+            (currentStep === 1 && !firstTask) && styles.nextButtonDisabled,
           ]}
           onPress={handleNext}
+          disabled={currentStep === 1 && !firstTask}
         >
           <Text style={styles.nextButtonText}>
-            {currentStep === steps.length - 1 ? "Let's Begin" : 'Continue'}
+            {currentStep === 4 ? "Let's Begin" : 'Continue'}
           </Text>
           <ArrowRight size={20} color="#FFF" strokeWidth={2.5} />
         </TouchableOpacity>
@@ -275,33 +343,11 @@ export function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
   );
 }
 
-function PainPoint({ emoji, text, color }: { emoji: string; text: string; color: string }) {
-  return (
-    <View style={styles.painPoint}>
-      <View style={[styles.painPointEmoji, { backgroundColor: color + '15' }]}>
-        <Text style={styles.painPointEmojiText}>{emoji}</Text>
-      </View>
-      <Text style={styles.painPointText}>{text}</Text>
-    </View>
-  );
-}
-
-function FeatureItem({ text, color }: { text: string; color: string }) {
+function FeatureItem({ text }: { text: string }) {
   return (
     <View style={styles.featureItem}>
-      <View style={[styles.featureDot, { backgroundColor: color }]} />
+      <View style={styles.featureDot} />
       <Text style={styles.featureText}>{text}</Text>
-    </View>
-  );
-}
-
-function TipCard({ number, text, color }: { number: string; text: string; color: string }) {
-  return (
-    <View style={styles.tipCard}>
-      <View style={[styles.tipNumber, { backgroundColor: color }]}>
-        <Text style={styles.tipNumberText}>{number}</Text>
-      </View>
-      <Text style={styles.tipText}>{text}</Text>
     </View>
   );
 }
@@ -328,14 +374,12 @@ const styles = StyleSheet.create({
     borderRadius: 4,
     backgroundColor: '#333',
   },
-  skipButton: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
+  dotActive: {
+    backgroundColor: '#FF8C42',
+    width: 24,
   },
-  skipText: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: '#999',
+  dotCompleted: {
+    backgroundColor: '#00D9A3',
   },
   content: {
     flex: 1,
@@ -344,9 +388,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
     alignItems: 'center',
   },
-  iconContainer: {
-    marginTop: 40,
-    marginBottom: 32,
+  stepContainer: {
+    width: '100%',
+    alignItems: 'center',
   },
   iconCircle: {
     width: 140,
@@ -354,10 +398,19 @@ const styles = StyleSheet.create({
     borderRadius: 70,
     alignItems: 'center',
     justifyContent: 'center',
+    marginTop: 20,
+    marginBottom: 32,
   },
-  textContainer: {
-    width: '100%',
-    marginBottom: 40,
+  appIconContainer: {
+    width: 140,
+    height: 140,
+    marginTop: 20,
+    marginBottom: 32,
+  },
+  appIcon: {
+    width: 140,
+    height: 140,
+    borderRadius: 32,
   },
   title: {
     fontSize: 32,
@@ -373,41 +426,12 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     lineHeight: 26,
     paddingHorizontal: 8,
+    marginBottom: 32,
   },
-  painPoints: {
+  featureList: {
     width: '100%',
     gap: 16,
-  },
-  painPoint: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 16,
-    backgroundColor: '#121212',
-    borderRadius: 16,
-    padding: 20,
-    borderWidth: 1,
-    borderColor: '#1A1A1A',
-  },
-  painPointEmoji: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  painPointEmojiText: {
-    fontSize: 24,
-  },
-  painPointText: {
-    flex: 1,
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#FFF',
-    lineHeight: 22,
-  },
-  features: {
-    width: '100%',
-    gap: 20,
+    marginTop: 8,
   },
   featureItem: {
     flexDirection: 'row',
@@ -416,21 +440,21 @@ const styles = StyleSheet.create({
     paddingLeft: 8,
   },
   featureDot: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: '#FF8C42',
   },
   featureText: {
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: '600',
     color: '#FFF',
-    lineHeight: 24,
+    lineHeight: 22,
   },
-  tipsContainer: {
-    width: '100%',
-    gap: 16,
+  wheelPreview: {
+    marginVertical: 32,
   },
-  tipCard: {
+  taskCard: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 16,
@@ -438,26 +462,95 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     padding: 20,
     borderWidth: 1,
-    borderColor: '#1A1A1A',
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+    width: '100%',
+    marginTop: 24,
   },
-  tipNumber: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
+  taskDot: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
   },
-  tipNumberText: {
-    fontSize: 18,
-    fontWeight: '800',
-    color: '#FFF',
-  },
-  tipText: {
+  taskInfo: {
     flex: 1,
-    fontSize: 16,
+  },
+  taskTitle: {
+    fontSize: 17,
     fontWeight: '600',
     color: '#FFF',
-    lineHeight: 22,
+    marginBottom: 4,
+  },
+  taskTime: {
+    fontSize: 14,
+    color: '#999',
+  },
+  categoryGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+    justifyContent: 'center',
+    marginTop: 8,
+  },
+  categoryCard: {
+    alignItems: 'center',
+    gap: 10,
+    padding: 16,
+    backgroundColor: '#121212',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+    width: '30%',
+  },
+  categoryCircle: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+  },
+  categoryName: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#999',
+  },
+  goalSection: {
+    width: '100%',
+    marginTop: 16,
+  },
+  goalValue: {
+    fontSize: 48,
+    fontWeight: '800',
+    color: '#00D9A3',
+    textAlign: 'center',
+    marginBottom: 24,
+  },
+  slider: {
+    width: '100%',
+    height: 40,
+  },
+  sliderLabels: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingHorizontal: 8,
+    marginTop: 8,
+  },
+  sliderLabel: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#666',
+  },
+  goalTip: {
+    backgroundColor: '#121212',
+    borderRadius: 14,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+    marginTop: 24,
+    width: '100%',
+  },
+  goalTipText: {
+    fontSize: 14,
+    color: '#999',
+    textAlign: 'center',
+    lineHeight: 20,
   },
   footer: {
     paddingHorizontal: 24,
@@ -470,6 +563,11 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     paddingVertical: 18,
     gap: 8,
+    backgroundColor: '#FF8C42',
+  },
+  nextButtonDisabled: {
+    backgroundColor: '#333',
+    opacity: 0.5,
   },
   nextButtonText: {
     fontSize: 17,
