@@ -1,28 +1,31 @@
 {
   "expo": {
-    "name": "Daily Planner Delight",
-    "slug": "daily-planner-delight",
+    "name": "Chronos - Plan Your Day",
+    "slug": "chronos",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "myapp",
+    "scheme": "chronos",
     "userInterfaceStyle": "automatic",
-    "newArchEnabled": true,
+    "newArchEnabled": false,
     "splash": {
       "image": "./assets/images/splash-icon.png",
       "resizeMode": "contain",
-      "backgroundColor": "#ffffff"
+      "backgroundColor": "#000000"
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "app.rork.daily-planner-delight"
+      "bundleIdentifier": "com.boraesn.chronos",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
-        "backgroundColor": "#ffffff"
+        "backgroundColor": "#000000"
       },
-      "package": "app.rork.daily_planner_delight"
+      "package": "com.boraesn.chronos"
     },
     "web": {
       "favicon": "./assets/images/favicon.png"
@@ -37,6 +40,14 @@
     ],
     "experiments": {
       "typedRoutes": true
+    },
+    "extra": {
+      "router": {
+        "origin": "https://rork.com/"
+      },
+      "eas": {
+        "projectId": "137d44fd-c57e-49c0-b489-92b009691135"
+      }
     }
   }
 }
