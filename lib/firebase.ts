@@ -26,22 +26,29 @@ const firebaseConfig = {
 };
 
 // Initialize Firebase app (singleton pattern)
-let firebaseApp: FirebaseApp;
+let firebaseApp: FirebaseApp | null = null;
+let firestore: Firestore | null = null;
+let auth: Auth | null = null;
 
-if (getApps().length === 0) {
-  firebaseApp = initializeApp(firebaseConfig);
-} else {
-  firebaseApp = getApp();
+try {
+  if (getApps().length === 0) {
+    firebaseApp = initializeApp(firebaseConfig);
+  } else {
+    firebaseApp = getApp();
+  }
+
+  // Initialize Firestore with offline persistence
+  firestore = initializeFirestore(firebaseApp, {
+    experimentalForceLongPolling: true, // Required for some React Native environments
+    cacheSizeBytes: 50 * 1024 * 1024, // 50MB cache
+  });
+
+  // Initialize Auth
+  auth = getAuth(firebaseApp);
+} catch (error) {
+  console.error('❌ Firebase initialization failed:', error);
+  console.error('⚠️  App will run in offline mode without cloud sync');
 }
-
-// Initialize Firestore with offline persistence
-const firestore: Firestore = initializeFirestore(firebaseApp, {
-  experimentalForceLongPolling: true, // Required for some React Native environments
-  cacheSizeBytes: 50 * 1024 * 1024, // 50MB cache
-});
-
-// Initialize Auth
-const auth: Auth = getAuth(firebaseApp);
 
 // Initialize Analytics (only on web or if supported)
 let analytics: Analytics | null = null;

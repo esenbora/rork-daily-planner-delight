@@ -38,7 +38,18 @@
       "env": {
         "EXPO_PUBLIC_APP_ENVIRONMENT": "production",
         "EXPO_PUBLIC_ENABLE_ANALYTICS": "true",
-        "EXPO_PUBLIC_ENABLE_CRASHLYTICS": "true"
+        "EXPO_PUBLIC_ENABLE_CRASHLYTICS": "true",
+        "EXPO_PUBLIC_FIREBASE_API_KEY": "AIzaSyBWsxCi7PVihNBhWwjw1AYgtnarNzXn4h0",
+        "EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN": "plannerproject-d0f3e.firebaseapp.com",
+        "EXPO_PUBLIC_FIREBASE_PROJECT_ID": "plannerproject-d0f3e",
+        "EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET": "plannerproject-d0f3e.firebasestorage.app",
+        "EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID": "307883899585",
+        "EXPO_PUBLIC_FIREBASE_APP_ID": "1:307883899585:ios:271184733837fe06753240",
+        "EXPO_PUBLIC_FIREBASE_MEASUREMENT_ID": "G-MEASUREMENT-PLACEHOLDER",
+        "EXPO_PUBLIC_FIREBASE_IOS_CLIENT_ID": "307883899585-placeholder.apps.googleusercontent.com",
+        "EXPO_PUBLIC_FIREBASE_IOS_BUNDLE_ID": "com.boraesn.chronos",
+        "EXPO_PUBLIC_REVENUECAT_IOS_API_KEY": "sk_yeUzxgqDbfhnwwMEvwGmSuwdbkBuE",
+        "EXPO_PUBLIC_RORK_API_BASE_URL": "https://api.rork.com"
       }
     }
   },

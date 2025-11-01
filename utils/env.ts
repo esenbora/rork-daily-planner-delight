@@ -113,8 +113,10 @@ class EnvironmentValidator {
     if (missingVars.length > 0) {
       const errorMessage = `Missing required environment variables:\n${missingVars.map(v => `  - ${v}`).join('\n')}\n\nPlease create a .env file based on .env.example`;
 
+      // In production, log error but don't throw - allow app to start with degraded functionality
       if (this.config.appEnvironment === 'production') {
-        throw new Error(errorMessage);
+        console.error(`❌ ${errorMessage}`);
+        console.error('⚠️  App will run with limited functionality due to missing configuration');
       } else {
         console.warn(`⚠️  ${errorMessage}`);
       }
