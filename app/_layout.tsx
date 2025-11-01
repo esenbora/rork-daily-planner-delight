@@ -1,9 +1,10 @@
 import { Stack } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import React, { useEffect, useState } from "react";
+import { View, Text, ActivityIndicator, StyleSheet } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { TaskProvider } from "@/contexts/TaskContext";
-import { SubscriptionProvider, useSubscription } from "@/contexts/SubscriptionContext";
+import { SubscriptionProvider } from "@/contexts/SubscriptionContext";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { trpc, trpcClient } from "@/lib/trpc";
 import ErrorBoundary from "@/components/ErrorBoundary";
@@ -11,19 +12,20 @@ import ErrorBoundary from "@/components/ErrorBoundary";
 SplashScreen.preventAutoHideAsync();
 
 function RootLayoutNav() {
-  const { isLoading: subscriptionLoading } = useSubscription();
   const [appReady, setAppReady] = useState(false);
 
   useEffect(() => {
-    // Hide splash screen after subscription initialization completes
-    if (!subscriptionLoading && !appReady) {
-      // Add small delay to ensure UI is fully rendered
-      setTimeout(() => {
-        SplashScreen.hideAsync();
-        setAppReady(true);
-      }, 100);
-    }
-  }, [subscriptionLoading, appReady]);
+    // Always hide splash screen after a maximum timeout
+    // This ensures the app shows even if initialization fails
+    const timer = setTimeout(() => {
+      SplashScreen.hideAsync().catch(err => {
+        console.warn('Failed to hide splash screen:', err);
+      });
+      setAppReady(true);
+    }, 2000); // 2 second max wait
+
+    return () => clearTimeout(timer);
+  }, []);
 
   return (
     <Stack screenOptions={{ headerShown: false }}>
