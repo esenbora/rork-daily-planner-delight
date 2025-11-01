@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   View,
   Text,
@@ -13,12 +13,20 @@ import { useRouter } from 'expo-router';
 import { useTasks } from '@/contexts/TaskContext';
 import { getWeekStart, getWeekDays, getShortDayName, formatMonthDay, addDays, formatTimeFromMinutes, formatDate } from '@/utils/dateHelpers';
 import { CATEGORY_CONFIGS } from '@/constants/types';
+import { logAnalyticsEvent } from '@/lib/firebase';
 
 export default function WeeklyScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { tasks, toggleTaskCompletion } = useTasks();
   const [selectedWeekStart, setSelectedWeekStart] = useState<Date>(getWeekStart(new Date()));
+
+  useEffect(() => {
+    logAnalyticsEvent('screen_view', {
+      screen_name: 'weekly',
+      screen_class: 'WeeklyScreen',
+    });
+  }, []);
 
   const weekDays = useMemo(() => getWeekDays(selectedWeekStart), [selectedWeekStart]);
 
@@ -134,7 +142,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: 20,
     paddingVertical: 20,
-    backgroundColor: '#1A1A2E',
+    backgroundColor: '#0A0A0A',
     borderBottomWidth: 1,
     borderBottomColor: 'rgba(255, 255, 255, 0.1)',
   },
@@ -172,7 +180,7 @@ const styles = StyleSheet.create({
     gap: 16,
   },
   daySection: {
-    backgroundColor: '#1A1A2E',
+    backgroundColor: '#121212',
     borderRadius: 16,
     padding: 16,
     borderWidth: 1,

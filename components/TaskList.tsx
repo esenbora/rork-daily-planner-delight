@@ -1,11 +1,12 @@
-import React, { useRef } from 'react';
+import React, { useRef, useCallback } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   TouchableOpacity,
-  ScrollView,
+  FlatList,
   Animated,
+  ListRenderItemInfo,
 } from 'react-native';
 import { Clock, Edit2, Trash2, GripVertical } from 'lucide-react-native';
 import { Task, CATEGORY_CONFIGS } from '@/constants/types';
@@ -17,38 +18,45 @@ interface TaskListProps {
   onEditTask: (task: Task) => void;
 }
 
+const EmptyListComponent = () => (
+  <View style={styles.emptyState}>
+    <View style={styles.emptyIconContainer}>
+      <Clock size={64} color="#333" strokeWidth={1.5} />
+    </View>
+    <Text style={styles.emptyTitle}>No Tasks Yet</Text>
+    <Text style={styles.emptyDescription}>
+      Start organizing your day by adding your first task
+    </Text>
+  </View>
+);
+
+const keyExtractor = (item: Task) => item.id;
+
 export const TaskList: React.FC<TaskListProps> = ({ tasks, onEditTask }) => {
   const { deleteTask } = useTasks();
 
-  if (tasks.length === 0) {
-    return (
-      <View style={styles.emptyState}>
-        <View style={styles.emptyIconContainer}>
-          <Clock size={64} color="#333" strokeWidth={1.5} />
-        </View>
-        <Text style={styles.emptyTitle}>No Tasks Yet</Text>
-        <Text style={styles.emptyDescription}>
-          Start organizing your day by adding your first task
-        </Text>
-      </View>
-    );
-  }
+  const renderItem = useCallback(({ item }: ListRenderItemInfo<Task>) => (
+    <TaskCard
+      task={item}
+      onEdit={() => onEditTask(item)}
+      onDelete={() => deleteTask(item.id)}
+    />
+  ), [onEditTask, deleteTask]);
 
   return (
-    <ScrollView 
+    <FlatList
+      data={tasks}
+      renderItem={renderItem}
+      keyExtractor={keyExtractor}
       style={styles.container}
-      contentContainerStyle={styles.contentContainer}
+      contentContainerStyle={[styles.contentContainer, tasks.length === 0 && styles.contentContainerEmpty]}
       showsVerticalScrollIndicator={false}
-    >
-      {tasks.map((task) => (
-        <TaskCard 
-          key={task.id} 
-          task={task} 
-          onEdit={() => onEditTask(task)}
-          onDelete={() => deleteTask(task.id)}
-        />
-      ))}
-    </ScrollView>
+      ListEmptyComponent={EmptyListComponent}
+      removeClippedSubviews={true}
+      maxToRenderPerBatch={10}
+      windowSize={5}
+      initialNumToRender={10}
+    />
   );
 };
 
@@ -132,6 +140,9 @@ const styles = StyleSheet.create({
   contentContainer: {
     padding: 20,
     gap: 12,
+  },
+  contentContainerEmpty: {
+    flexGrow: 1,
   },
   emptyState: {
     flex: 1,

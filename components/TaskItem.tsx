@@ -1,19 +1,14 @@
-import React, { useRef } from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   TouchableOpacity,
-  Animated,
-  PanResponder,
-  Dimensions,
+  Alert,
 } from 'react-native';
 import { Clock, Edit2, Trash2, Check, GripVertical } from 'lucide-react-native';
 import { Task, CATEGORY_CONFIGS } from '@/constants/types';
 import { formatTimeFromMinutes, formatDuration } from '@/utils/dateHelpers';
-
-const SCREEN_WIDTH = Dimensions.get('window').width;
-const SWIPE_THRESHOLD = 80;
 
 interface TaskItemProps {
   task: Task;
@@ -23,7 +18,7 @@ interface TaskItemProps {
   isDragging?: boolean;
 }
 
-export const TaskItem: React.FC<TaskItemProps> = ({
+export const TaskItem: React.FC<TaskItemProps> = React.memo(({
   task,
   onEdit,
   onDelete,
@@ -31,66 +26,33 @@ export const TaskItem: React.FC<TaskItemProps> = ({
   isDragging = false,
 }) => {
   const config = CATEGORY_CONFIGS[task.category];
-  const translateX = useRef(new Animated.Value(0)).current;
-  const opacity = useRef(new Animated.Value(1)).current;
-  const scale = useRef(new Animated.Value(1)).current;
 
-  const panResponder = useRef(
-    PanResponder.create({
-      onMoveShouldSetPanResponder: (_, gestureState) => {
-        return Math.abs(gestureState.dx) > 5;
-      },
-      onPanResponderGrant: () => {
-        Animated.spring(scale, {
-          toValue: 0.98,
-          useNativeDriver: true,
-        }).start();
-      },
-      onPanResponderMove: (_, gestureState) => {
-        if (gestureState.dx < 0) {
-          translateX.setValue(gestureState.dx);
-        }
-      },
-      onPanResponderRelease: (_, gestureState) => {
-        Animated.spring(scale, {
-          toValue: 1,
-          useNativeDriver: true,
-        }).start();
-
-        if (gestureState.dx < -SWIPE_THRESHOLD) {
-          Animated.timing(translateX, {
-            toValue: -SCREEN_WIDTH,
-            duration: 300,
-            useNativeDriver: true,
-          }).start(() => {
-            onDelete();
-          });
-        } else {
-          Animated.spring(translateX, {
-            toValue: 0,
-            useNativeDriver: true,
-          }).start();
-        }
-      },
-    })
-  ).current;
+  const handleDelete = () => {
+    Alert.alert(
+      'Delete Task',
+      `Are you sure you want to delete "${task.title}"?`,
+      [
+        {
+          text: 'Cancel',
+          style: 'cancel',
+        },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: onDelete,
+        },
+      ],
+      { cancelable: true }
+    );
+  };
 
   return (
     <View style={styles.container}>
-      <View style={styles.deleteBackground}>
-        <Trash2 size={24} color="#FFF" />
-        <Text style={styles.deleteText}>Delete</Text>
-      </View>
-
-      <Animated.View
+      <View
         style={[
           styles.taskCard,
-          {
-            transform: [{ translateX }, { scale }],
-            opacity: isDragging ? 0.7 : opacity,
-          },
+          isDragging && { opacity: 0.7 },
         ]}
-        {...panResponder.panHandlers}
       >
         <View style={[styles.taskColorBar, { backgroundColor: config.color }]} />
 
@@ -132,6 +94,9 @@ export const TaskItem: React.FC<TaskItemProps> = ({
             <View style={styles.taskActions}>
               <TouchableOpacity style={styles.actionButton} onPress={onEdit}>
                 <Edit2 size={15} color="#888" />
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.actionButton} onPress={handleDelete}>
+                <Trash2 size={15} color="#EF4444" />
               </TouchableOpacity>
             </View>
           </View>
@@ -203,33 +168,25 @@ export const TaskItem: React.FC<TaskItemProps> = ({
             )}
           </View>
         </View>
-      </Animated.View>
+      </View>
     </View>
   );
-};
+}, (prevProps, nextProps) => {
+  // Custom comparison for better performance
+  return (
+    prevProps.task.id === nextProps.task.id &&
+    prevProps.task.completed === nextProps.task.completed &&
+    prevProps.task.title === nextProps.task.title &&
+    prevProps.task.startTime === nextProps.task.startTime &&
+    prevProps.task.duration === nextProps.task.duration &&
+    prevProps.task.category === nextProps.task.category &&
+    prevProps.isDragging === nextProps.isDragging
+  );
+});
 
 const styles = StyleSheet.create({
   container: {
     marginBottom: 10,
-    position: 'relative' as const,
-  },
-  deleteBackground: {
-    position: 'absolute' as const,
-    right: 0,
-    top: 0,
-    bottom: 0,
-    backgroundColor: '#C75B6E',
-    justifyContent: 'center',
-    alignItems: 'center',
-    width: 120,
-    borderRadius: 16,
-    flexDirection: 'row',
-    gap: 8,
-  },
-  deleteText: {
-    color: '#FFF',
-    fontWeight: '700',
-    fontSize: 14,
   },
   taskCard: {
     flexDirection: 'row',

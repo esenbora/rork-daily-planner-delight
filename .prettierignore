@@ -1,0 +1,25 @@
+# Dependencies
+node_modules/
+.expo/
+dist/
+web-build/
+
+# Build outputs
+*.tsbuildinfo
+.vercel
+
+# Firebase
+google-services.json
+GoogleService-Info.plist
+
+# Environment
+.env
+.env.local
+.env.development
+.env.staging
+.env.production
+
+# Misc
+coverage/
+.DS_Store
+*.log

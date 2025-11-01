@@ -1,0 +1,48 @@
+Resolved "production" environment for the build. Learn more: https://docs.expo.dev/eas/environment-variables/#setting-the-environment-for-your-builds
+No environment variables with visibility "Plain text" and "Sensitive" found for the "production" environment on EAS.
+Environment variables loaded from the "production" build profile "env" configuration: EXPO_PUBLIC_APP_ENVIRONMENT, EXPO_PUBLIC_ENABLE_ANALYTICS, EXPO_PUBLIC_ENABLE_CRASHLYTICS.
+
+- Incrementing buildNumber from 12 to 13.
+✔ Incremented buildNumber from 12 to 13.
+✔ Using remote iOS credentials (Expo server)
+
+Distribution Certificate is not validated for non-interactive builds.
+Skipping Provisioning Profile validation on Apple Servers because we aren't authenticated.
+
+Project Credentials Configuration
+
+Project                   @boraesen/chronos
+Bundle Identifier         com.boraesn.chronos
+                          
+App Store Configuration   
+                          
+Distribution Certificate  
+Serial Number             21BA3AF1463AC631D792216D68C9C478
+Expiration Date           Sat, 24 Oct 2026 22:36:10 GMT
+Apple Team                G2F6624QWC (BORA ESEN (Individual))
+Updated                   13 hours ago
+                          
+Provisioning Profile      
+Developer Portal ID       3C58MBX2DW
+Status                    active
+Expiration                Sat, 24 Oct 2026 22:36:10 GMT
+Apple Team                G2F6624QWC (BORA ESEN (Individual))
+Updated                   13 hours ago
+                          
+All credentials are ready to build @boraesen/chronos (com.boraesn.chronos)
+
+
+Compressing project files and uploading to EAS Build. Learn more: https://expo.fyi/eas-build-archive
+- Uploading to EAS Build (0 / 4.8 MB)
+✔ Uploaded to EAS 2s
+- Computing project fingerprint
+✔ Computed project fingerprint
+
+See logs: https://expo.dev/accounts/boraesen/projects/chronos/builds/e7d47b79-e439-46cc-b0f4-c7f686ec0112
+
+Waiting for build to complete. You can press Ctrl+C to exit.
+- Waiting for build to complete.
+✖ Build failed
+
+🍏 iOS build failed:
+Unknown error. See logs of the Install dependencies build phase for more information.

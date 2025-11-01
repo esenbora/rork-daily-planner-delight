@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   View,
   Text,
@@ -13,6 +13,7 @@ import { useRouter } from 'expo-router';
 import { useTasks } from '@/contexts/TaskContext';
 import { useSubscription } from '@/contexts/SubscriptionContext';
 import { getWeekStart, getWeekDays, getShortDayName, formatDate } from '@/utils/dateHelpers';
+import { logAnalyticsEvent } from '@/lib/firebase';
 
 const CHART_HEIGHT = 300;
 
@@ -22,6 +23,14 @@ export default function StatisticsScreen() {
   const { tasks } = useTasks();
   const { isPremium } = useSubscription();
   const [selectedWeekStart] = useState<Date>(getWeekStart(new Date()));
+
+  useEffect(() => {
+    logAnalyticsEvent('screen_view', {
+      screen_name: 'statistics',
+      screen_class: 'StatisticsScreen',
+      is_premium: isPremium,
+    });
+  }, [isPremium]);
 
   const weekDays = useMemo(() => getWeekDays(selectedWeekStart), [selectedWeekStart]);
 

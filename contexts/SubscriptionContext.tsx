@@ -1,156 +1,380 @@
+/**
+ * Subscription Context with RevenueCat Integration
+ * Manages subscription state and purchase flow
+ */
+
 import { useState, useEffect, useCallback } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import createContextHook from '@nkzw/create-context-hook';
+import { PurchasesOffering, PurchasesPackage } from 'react-native-purchases';
+import {
+  initializeRevenueCat,
+  getSubscriptionStatus,
+  getOfferings,
+  purchasePackage,
+  restorePurchases,
+  setupCustomerInfoUpdateListener,
+  SubscriptionTier,
+  SubscriptionStatus,
+  getFeatureLimits,
+  identifyUser,
+  logoutUser as logoutRevenueCat,
+} from '@/lib/revenuecat';
+import { getCurrentUserId } from '@/lib/firestore-sync';
+import { logAnalyticsEvent, logError } from '@/lib/firebase';
 
-export type SubscriptionTier = 'free' | 'pro' | 'lifetime';
+export type { SubscriptionTier, SubscriptionStatus };
 
 export interface SubscriptionFeatures {
   maxTasksPerDay: number;
+  maxTemplates: number;
   taskTemplates: boolean;
   analytics: boolean;
   customCategories: boolean;
   export: boolean;
   aiSuggestions: boolean;
+  aiAssistant: boolean;
   prioritySupport: boolean;
 }
 
-export interface Subscription {
-  tier: SubscriptionTier;
-  expiresAt?: Date;
-  features: SubscriptionFeatures;
-}
-
-const SUBSCRIPTION_KEY = '@planner_subscription';
-
-const FEATURES_BY_TIER: Record<SubscriptionTier, SubscriptionFeatures> = {
-  free: {
-    maxTasksPerDay: 3,
-    taskTemplates: false,
-    analytics: false,
-    customCategories: false,
-    export: false,
-    aiSuggestions: false,
-    prioritySupport: false,
-  },
-  pro: {
-    maxTasksPerDay: 50,
-    taskTemplates: true,
-    analytics: true,
-    customCategories: true,
-    export: true,
-    aiSuggestions: true,
-    prioritySupport: false,
-  },
-  lifetime: {
-    maxTasksPerDay: Infinity,
-    taskTemplates: true,
-    analytics: true,
-    customCategories: true,
-    export: true,
-    aiSuggestions: true,
-    prioritySupport: true,
-  },
-};
+const SUBSCRIPTION_CACHE_KEY = '@planner_subscription_cache';
 
 export const [SubscriptionProvider, useSubscription] = createContextHook(() => {
-  const [subscription, setSubscription] = useState<Subscription>({
+  const [subscriptionStatus, setSubscriptionStatus] = useState<SubscriptionStatus>({
     tier: 'free',
-    features: FEATURES_BY_TIER.free,
+    isPremium: false,
+    willRenew: false,
   });
+  const [features, setFeatures] = useState<SubscriptionFeatures>(getFeatureLimits('free'));
   const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [isInitialized, setIsInitialized] = useState<boolean>(false);
+  const [currentOffering, setCurrentOffering] = useState<PurchasesOffering | null>(null);
+  const [isPurchasing, setIsPurchasing] = useState<boolean>(false);
+  const [isRestoring, setIsRestoring] = useState<boolean>(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const loadSubscription = useCallback(async () => {
+  /**
+   * Initialize RevenueCat SDK and load subscription status
+   */
+  const initialize = useCallback(async () => {
     try {
-      const stored = await AsyncStorage.getItem(SUBSCRIPTION_KEY);
-      if (stored) {
-        const parsed = JSON.parse(stored) as { tier: SubscriptionTier; expiresAt?: string };
-        const expiresAt = parsed.expiresAt ? new Date(parsed.expiresAt) : undefined;
-        
-        if (expiresAt && expiresAt < new Date()) {
-          setSubscription({
-            tier: 'free',
-            features: FEATURES_BY_TIER.free,
-          });
-        } else {
-          const tier = parsed.tier;
-          setSubscription({
-            tier,
-            expiresAt,
-            features: FEATURES_BY_TIER[tier],
-          });
-        }
-      }
+      setIsLoading(true);
+      setError(null);
+
+      // Get current user ID if authenticated
+      const userId = getCurrentUserId();
+
+      // Initialize RevenueCat
+      await initializeRevenueCat(userId || undefined);
+      setIsInitialized(true);
+
+      // Load current subscription status
+      const status = await getSubscriptionStatus();
+      updateSubscriptionState(status);
+
+      // Load available offerings
+      const offerings = await getOfferings();
+      setCurrentOffering(offerings);
+
+      logAnalyticsEvent('subscription_context_initialized', {
+        tier: status.tier,
+        is_premium: status.isPremium,
+        has_user_id: !!userId,
+      });
     } catch (error) {
-      console.error('Failed to load subscription:', error);
+      console.error('Failed to initialize subscription context:', error);
+      logError(error as Error, { context: 'SubscriptionContext.initialize' });
+      setError('Failed to load subscription status');
+
+      // Try to load from cache
+      await loadFromCache();
     } finally {
       setIsLoading(false);
     }
   }, []);
 
-  const saveSubscription = useCallback(async (sub: Subscription) => {
-    try {
-      await AsyncStorage.setItem(SUBSCRIPTION_KEY, JSON.stringify(sub));
-    } catch (error) {
-      console.error('Failed to save subscription:', error);
-    }
+  /**
+   * Update subscription state and features
+   */
+  const updateSubscriptionState = useCallback((status: SubscriptionStatus) => {
+    setSubscriptionStatus(status);
+    setFeatures(getFeatureLimits(status.tier));
+
+    // Cache the status
+    saveToCache(status);
   }, []);
 
+  /**
+   * Save subscription status to cache
+   */
+  const saveToCache = async (status: SubscriptionStatus) => {
+    try {
+      await AsyncStorage.setItem(SUBSCRIPTION_CACHE_KEY, JSON.stringify(status));
+    } catch (error) {
+      console.error('Failed to cache subscription status:', error);
+    }
+  };
+
+  /**
+   * Load subscription status from cache (fallback)
+   */
+  const loadFromCache = async () => {
+    try {
+      const cached = await AsyncStorage.getItem(SUBSCRIPTION_CACHE_KEY);
+      if (cached) {
+        const status = JSON.parse(cached) as SubscriptionStatus;
+
+        // Check if cached subscription is expired
+        if (status.expiresAt && new Date(status.expiresAt) < new Date()) {
+          // Expired, reset to free
+          updateSubscriptionState({
+            tier: 'free',
+            isPremium: false,
+            willRenew: false,
+          });
+        } else {
+          updateSubscriptionState(status);
+        }
+      }
+    } catch (error) {
+      console.error('Failed to load cached subscription:', error);
+    }
+  };
+
+  /**
+   * Initialize on mount
+   */
   useEffect(() => {
-    loadSubscription();
-  }, [loadSubscription]);
+    initialize();
+  }, [initialize]);
 
-  const upgradeToPro = useCallback((months: number = 1) => {
-    const expiresAt = new Date();
-    expiresAt.setMonth(expiresAt.getMonth() + months);
-    
-    const newSubscription: Subscription = {
-      tier: 'pro',
-      expiresAt,
-      features: FEATURES_BY_TIER.pro,
+  /**
+   * Set up real-time subscription update listener
+   */
+  useEffect(() => {
+    if (!isInitialized) return;
+
+    const unsubscribe = setupCustomerInfoUpdateListener(status => {
+      console.log('Subscription status updated:', status);
+      updateSubscriptionState(status);
+    });
+
+    return () => {
+      unsubscribe();
     };
-    
-    setSubscription(newSubscription);
-    saveSubscription(newSubscription);
-  }, [saveSubscription]);
+  }, [isInitialized, updateSubscriptionState]);
 
-  const upgradeToLifetime = useCallback(() => {
-    const newSubscription: Subscription = {
-      tier: 'lifetime',
-      features: FEATURES_BY_TIER.lifetime,
-    };
-    
-    setSubscription(newSubscription);
-    saveSubscription(newSubscription);
-  }, [saveSubscription]);
+  /**
+   * Identify user when they log in
+   */
+  const identifySubscriptionUser = useCallback(async (userId: string) => {
+    try {
+      await identifyUser(userId);
 
-  const cancelSubscription = useCallback(() => {
-    const newSubscription: Subscription = {
-      tier: 'free',
-      features: FEATURES_BY_TIER.free,
-    };
-    
-    setSubscription(newSubscription);
-    saveSubscription(newSubscription);
-  }, [saveSubscription]);
+      // Reload subscription status
+      const status = await getSubscriptionStatus();
+      updateSubscriptionState(status);
 
-  const hasFeature = useCallback((feature: keyof SubscriptionFeatures): boolean => {
-    return subscription.features[feature] as boolean;
-  }, [subscription.features]);
+      logAnalyticsEvent('subscription_user_identified', {
+        user_id: userId,
+        tier: status.tier,
+      });
+    } catch (error) {
+      logError(error as Error, { context: 'identifySubscriptionUser', userId });
+    }
+  }, [updateSubscriptionState]);
 
-  const canAddMoreTasks = useCallback((currentCount: number): boolean => {
-    return currentCount < subscription.features.maxTasksPerDay;
-  }, [subscription.features.maxTasksPerDay]);
+  /**
+   * Log out user from RevenueCat
+   */
+  const logoutSubscriptionUser = useCallback(async () => {
+    try {
+      await logoutRevenueCat();
 
-  const isPremium = subscription.tier !== 'free';
+      // Reset to free tier
+      updateSubscriptionState({
+        tier: 'free',
+        isPremium: false,
+        willRenew: false,
+      });
+
+      logAnalyticsEvent('subscription_user_logged_out');
+    } catch (error) {
+      logError(error as Error, { context: 'logoutSubscriptionUser' });
+    }
+  }, [updateSubscriptionState]);
+
+  /**
+   * Purchase a subscription package
+   */
+  const purchase = useCallback(async (packageToPurchase: PurchasesPackage) => {
+    try {
+      setIsPurchasing(true);
+      setError(null);
+
+      const status = await purchasePackage(packageToPurchase);
+      updateSubscriptionState(status);
+
+      logAnalyticsEvent('purchase_successful', {
+        tier: status.tier,
+        product_id: packageToPurchase.product.identifier,
+      });
+
+      return status;
+    } catch (error: any) {
+      const errorMessage = error.message || 'Purchase failed';
+      setError(errorMessage);
+
+      if (errorMessage !== 'Purchase cancelled') {
+        logError(error as Error, {
+          context: 'purchase',
+          packageId: packageToPurchase.identifier,
+        });
+      }
+
+      throw error;
+    } finally {
+      setIsPurchasing(false);
+    }
+  }, [updateSubscriptionState]);
+
+  /**
+   * Restore previous purchases
+   */
+  const restore = useCallback(async () => {
+    try {
+      setIsRestoring(true);
+      setError(null);
+
+      const status = await restorePurchases();
+      updateSubscriptionState(status);
+
+      logAnalyticsEvent('restore_successful', {
+        tier: status.tier,
+        is_premium: status.isPremium,
+      });
+
+      return status;
+    } catch (error) {
+      const errorMessage = 'Failed to restore purchases';
+      setError(errorMessage);
+      logError(error as Error, { context: 'restore' });
+      throw error;
+    } finally {
+      setIsRestoring(false);
+    }
+  }, [updateSubscriptionState]);
+
+  /**
+   * Refresh subscription status from RevenueCat
+   */
+  const refresh = useCallback(async () => {
+    try {
+      setIsLoading(true);
+      setError(null);
+
+      const status = await getSubscriptionStatus();
+      updateSubscriptionState(status);
+
+      // Also refresh offerings
+      const offerings = await getOfferings();
+      setCurrentOffering(offerings);
+
+      logAnalyticsEvent('subscription_refreshed', {
+        tier: status.tier,
+      });
+    } catch (error) {
+      logError(error as Error, { context: 'refresh' });
+      setError('Failed to refresh subscription');
+    } finally {
+      setIsLoading(false);
+    }
+  }, [updateSubscriptionState]);
+
+  /**
+   * Check if user has a specific feature
+   */
+  const hasFeature = useCallback(
+    (feature: keyof SubscriptionFeatures): boolean => {
+      return features[feature] as boolean;
+    },
+    [features]
+  );
+
+  /**
+   * Check if user can add more tasks
+   */
+  const canAddMoreTasks = useCallback(
+    (currentCount: number): boolean => {
+      return currentCount < features.maxTasksPerDay;
+    },
+    [features.maxTasksPerDay]
+  );
+
+  /**
+   * Get available packages from current offering
+   */
+  const getAvailablePackages = useCallback((): PurchasesPackage[] => {
+    return currentOffering?.availablePackages || [];
+  }, [currentOffering]);
+
+  /**
+   * Get specific package by identifier
+   */
+  const getPackageById = useCallback(
+    (identifier: string): PurchasesPackage | null => {
+      const packages = getAvailablePackages();
+      return packages.find(pkg => pkg.identifier === identifier) || null;
+    },
+    [getAvailablePackages]
+  );
+
+  /**
+   * Check if subscription will renew
+   */
+  const willRenew = subscriptionStatus.willRenew;
+
+  /**
+   * Check if user is premium
+   */
+  const isPremium = subscriptionStatus.isPremium;
+
+  /**
+   * Get current tier
+   */
+  const tier = subscriptionStatus.tier;
+
+  /**
+   * Get subscription expiration date
+   */
+  const expiresAt = subscriptionStatus.expiresAt;
 
   return {
-    subscription,
-    isLoading,
+    // State
+    subscriptionStatus,
+    features,
+    tier,
     isPremium,
-    upgradeToPro,
-    upgradeToLifetime,
-    cancelSubscription,
+    expiresAt,
+    willRenew,
+    isLoading,
+    isInitialized,
+    isPurchasing,
+    isRestoring,
+    error,
+    currentOffering,
+
+    // Actions
+    purchase,
+    restore,
+    refresh,
+    identifySubscriptionUser,
+    logoutSubscriptionUser,
+
+    // Helpers
     hasFeature,
     canAddMoreTasks,
+    getAvailablePackages,
+    getPackageById,
   };
 });

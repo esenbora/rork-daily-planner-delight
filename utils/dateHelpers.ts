@@ -1,5 +1,9 @@
 export const formatDate = (date: Date): string => {
-  return date.toISOString().split('T')[0];
+  // Use local timezone instead of UTC to avoid date shifting
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
 };
 
 export const formatMonthDay = (date: Date): string => {
@@ -38,8 +42,10 @@ export const formatDuration = (minutes: number): string => {
 export const getWeekStart = (date: Date): Date => {
   const result = new Date(date);
   const day = result.getDay();
-  const diff = result.getDate() - day;
-  result.setDate(diff);
+  // Calculate difference to Monday (day 1)
+  // If Sunday (0), go back 6 days. Otherwise, go back (day - 1) days
+  const diff = day === 0 ? -6 : 1 - day;
+  result.setDate(result.getDate() + diff);
   result.setHours(0, 0, 0, 0);
   return result;
 };

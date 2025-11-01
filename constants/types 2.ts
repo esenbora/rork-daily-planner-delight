@@ -1,17 +1,8 @@
-export type TaskCategory = 'meeting' | 'working' | 'creative' | 'building' | 'focus' | 'personal' | string;
+export type TaskCategory = 'meeting' | 'working' | 'creative' | 'building' | 'focus' | 'personal';
 
 export type RepeatType = 'none' | 'daily' | 'weekly' | 'monthly';
 
 export type TaskPriority = 'low' | 'medium' | 'high';
-
-export interface CustomCategory {
-  id: string;
-  name: string;
-  color: string;
-  gradient: [string, string];
-  createdAt: string;
-  isDefault: boolean;
-}
 
 export interface Task {
   id: string;

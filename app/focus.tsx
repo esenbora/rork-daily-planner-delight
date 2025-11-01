@@ -12,6 +12,7 @@ import { X, Play, Pause, RotateCcw, Coffee } from 'lucide-react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useTasks } from '@/contexts/TaskContext';
 import { CATEGORY_CONFIGS } from '@/constants/types';
+import { logAnalyticsEvent } from '@/lib/firebase';
 
 export default function FocusScreen() {
   const insets = useSafeAreaInsets();
@@ -27,6 +28,17 @@ export default function FocusScreen() {
   const [isRunning, setIsRunning] = useState<boolean>(false);
   const [isBreak, setIsBreak] = useState<boolean>(false);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const sessionStartTimeRef = useRef<number>(0);
+
+  // Track screen view
+  useEffect(() => {
+    logAnalyticsEvent('screen_view', {
+      screen_name: 'focus',
+      screen_class: 'FocusScreen',
+      task_id: taskId,
+      task_category: task?.category,
+    });
+  }, [taskId, task?.category]);
 
   const pulseAnim = useRef(new Animated.Value(1)).current;
 
@@ -57,6 +69,16 @@ export default function FocusScreen() {
         setTimeRemaining((prev) => {
           if (prev <= 1) {
             setIsRunning(false);
+
+            // Log focus session completion
+            const sessionDuration = task ? task.duration * 60 - 1 : 1499;
+            logAnalyticsEvent('focus_session_completed', {
+              task_id: taskId,
+              task_category: task?.category,
+              duration_seconds: sessionDuration,
+              was_break: isBreak,
+            });
+
             if (!isBreak) {
               setIsBreak(true);
               return 300;
@@ -79,14 +101,35 @@ export default function FocusScreen() {
         clearInterval(intervalRef.current);
       }
     };
-  }, [isRunning, isBreak, task]);
+  }, [isRunning, isBreak, task, taskId]);
 
   const toggleTimer = () => {
-    setIsRunning(!isRunning);
+    const newRunningState = !isRunning;
+    setIsRunning(newRunningState);
+
+    if (newRunningState) {
+      sessionStartTimeRef.current = Date.now();
+      logAnalyticsEvent('focus_session_started', {
+        task_id: taskId,
+        task_category: task?.category,
+        is_break: isBreak,
+      });
+    } else {
+      logAnalyticsEvent('focus_session_paused', {
+        task_id: taskId,
+        task_category: task?.category,
+        time_elapsed: Date.now() - sessionStartTimeRef.current,
+      });
+    }
   };
 
   const resetTimer = () => {
     setIsRunning(false);
+    logAnalyticsEvent('focus_timer_reset', {
+      task_id: taskId,
+      was_break: isBreak,
+    });
+
     if (isBreak) {
       setTimeRemaining(300);
     } else {
@@ -98,6 +141,9 @@ export default function FocusScreen() {
     setIsBreak(true);
     setIsRunning(false);
     setTimeRemaining(300);
+    logAnalyticsEvent('break_started', {
+      task_id: taskId,
+    });
   };
 
   const formatTime = (seconds: number) => {

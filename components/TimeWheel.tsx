@@ -1,8 +1,10 @@
 import React, { useMemo } from 'react';
 import { View, StyleSheet, Text, Dimensions } from 'react-native';
-import Svg, { Circle, Path, G, Text as SvgText } from 'react-native-svg';
-import { Task, CATEGORY_CONFIGS } from '@/constants/types';
+import Svg, { Circle, Path, G, Text as SvgText, Defs, LinearGradient, Stop, ForeignObject } from 'react-native-svg';
+import { Users, Briefcase, Palette, Hammer, Target, User } from 'lucide-react-native';
+import { Task, CATEGORY_CONFIGS, TaskCategory } from '@/constants/types';
 import { formatDuration } from '@/utils/dateHelpers';
+import { COLORS } from '@/constants/theme';
 
 interface TimeWheelProps {
   tasks: Task[];
@@ -11,15 +13,28 @@ interface TimeWheelProps {
 }
 
 const { width } = Dimensions.get('window');
-const WHEEL_SIZE = Math.min(width * 0.8, 360);
+const WHEEL_SIZE = Math.min(width * 0.85, 380);
 const CENTER = WHEEL_SIZE / 2;
-const OUTER_RADIUS = WHEEL_SIZE / 2 - 24;
-const INNER_RADIUS = WHEEL_SIZE / 2 - 80;
-const TICK_OUTER = WHEEL_SIZE / 2 - 18;
-const TICK_INNER_MAJOR = WHEEL_SIZE / 2 - 38;
-const TICK_INNER_MINOR = WHEEL_SIZE / 2 - 28;
+const OUTER_RADIUS = WHEEL_SIZE / 2 - 20;
+const INNER_RADIUS = WHEEL_SIZE / 2 - 90;
+const TICK_OUTER = WHEEL_SIZE / 2 - 16;
+const TICK_INNER_MAJOR = WHEEL_SIZE / 2 - 32;
+const TICK_INNER_MINOR = WHEEL_SIZE / 2 - 24;
 
-export const TimeWheel: React.FC<TimeWheelProps> = ({ tasks, scheduledMinutes, dayName }) => {
+// Category icon mapping
+const getCategoryIcon = (category: TaskCategory) => {
+  switch (category) {
+    case 'meeting': return Users;
+    case 'working': return Briefcase;
+    case 'creative': return Palette;
+    case 'building': return Hammer;
+    case 'focus': return Target;
+    case 'personal': return User;
+    default: return Target;
+  }
+};
+
+export const TimeWheel: React.FC<TimeWheelProps> = React.memo(({ tasks, scheduledMinutes, dayName }) => {
   const taskArcs = useMemo(() => {
     return tasks.map(task => {
       const startAngle = (task.startTime / 1440) * 360 - 90;
@@ -55,14 +70,21 @@ export const TimeWheel: React.FC<TimeWheelProps> = ({ tasks, scheduledMinutes, d
       const labelX = CENTER + labelRadius * Math.cos(labelRad);
       const labelY = CENTER + labelRadius * Math.sin(labelRad);
       
+      // Calculate if task is large enough to show icon (minimum 30 minutes)
+      const showIcon = task.duration >= 30;
+
       return {
         id: task.id,
         path: pathData,
         color: config.color,
+        gradient: config.gradient,
+        category: task.category,
         label: task.title,
         labelX,
         labelY,
         labelAngle: labelAngle + 90,
+        showIcon,
+        duration: task.duration,
       };
     });
   }, [tasks]);
@@ -108,31 +130,38 @@ export const TimeWheel: React.FC<TimeWheelProps> = ({ tasks, scheduledMinutes, d
 
   return (
     <View style={styles.container}>
-      <View style={styles.wheelShadow} />
       <Svg width={WHEEL_SIZE} height={WHEEL_SIZE}>
-        <Circle
-          cx={CENTER}
-          cy={CENTER}
-          r={OUTER_RADIUS + 4}
-          fill="none"
-          stroke="rgba(139, 122, 199, 0.15)"
-          strokeWidth={8}
-        />
+        <Defs>
+          {taskArcs.map(arc => (
+            <LinearGradient
+              key={`gradient-${arc.id}`}
+              id={`gradient-${arc.id}`}
+              x1="0%"
+              y1="0%"
+              x2="100%"
+              y2="100%"
+            >
+              <Stop offset="0%" stopColor={arc.gradient[0]} stopOpacity="0.95" />
+              <Stop offset="100%" stopColor={arc.gradient[1]} stopOpacity="0.95" />
+            </LinearGradient>
+          ))}
+        </Defs>
+
         <Circle
           cx={CENTER}
           cy={CENTER}
           r={OUTER_RADIUS}
           fill="none"
-          stroke="#1A1A2E"
-          strokeWidth={2}
+          stroke="rgba(255, 255, 255, 0.05)"
+          strokeWidth={1}
         />
         <Circle
           cx={CENTER}
           cy={CENTER}
           r={INNER_RADIUS}
           fill="none"
-          stroke="#1A1A2E"
-          strokeWidth={2}
+          stroke="rgba(255, 255, 255, 0.05)"
+          strokeWidth={1}
         />
         
         {hourTicks.map(tick => {
@@ -141,8 +170,8 @@ export const TimeWheel: React.FC<TimeWheelProps> = ({ tasks, scheduledMinutes, d
               <Path
                 key={tick.id}
                 d={`M ${tick.x1} ${tick.y1} L ${tick.x2} ${tick.y2}`}
-                stroke={tick.isMajor ? 'rgba(139, 122, 199, 0.5)' : 'rgba(139, 122, 199, 0.2)'}
-                strokeWidth={tick.isMajor ? 2.5 : 1.5}
+                stroke={tick.isMajor ? 'rgba(255, 255, 255, 0.4)' : 'rgba(255, 255, 255, 0.2)'}
+                strokeWidth={tick.isMajor ? 2.5 : 1}
               />
             );
           } else if ('label' in tick) {
@@ -151,7 +180,7 @@ export const TimeWheel: React.FC<TimeWheelProps> = ({ tasks, scheduledMinutes, d
                 key={tick.id}
                 x={tick.labelX}
                 y={tick.labelY}
-                fill="#8B7AC7"
+                fill="rgba(255, 255, 255, 0.7)"
                 fontSize="13"
                 fontWeight="600"
                 textAnchor="middle"
@@ -164,20 +193,44 @@ export const TimeWheel: React.FC<TimeWheelProps> = ({ tasks, scheduledMinutes, d
           return null;
         })}
         
-        {taskArcs.map(arc => (
-          <G key={arc.id}>
-            <Path
-              d={arc.path}
-              fill={arc.color}
-              opacity={0.85}
-            />
-            <Path
-              d={arc.path}
-              fill="url(#gradient)"
-              opacity={0.3}
-            />
-          </G>
-        ))}
+        {taskArcs.map(arc => {
+          const Icon = getCategoryIcon(arc.category);
+          return (
+            <G key={arc.id}>
+              {/* Task arc with gradient */}
+              <Path
+                d={arc.path}
+                fill={`url(#gradient-${arc.id})`}
+              />
+              {/* Stroke for depth */}
+              <Path
+                d={arc.path}
+                fill="none"
+                stroke={arc.color}
+                strokeWidth={2}
+                opacity={0.4}
+              />
+              {/* Category icon */}
+              {arc.showIcon && (
+                <G
+                  x={arc.labelX - 12}
+                  y={arc.labelY - 12}
+                  rotation={arc.labelAngle}
+                  origin={`${arc.labelX}, ${arc.labelY}`}
+                >
+                  <Icon
+                    x={arc.labelX - 12}
+                    y={arc.labelY - 12}
+                    width={24}
+                    height={24}
+                    color="rgba(255, 255, 255, 0.9)"
+                    strokeWidth={2.5}
+                  />
+                </G>
+              )}
+            </G>
+          );
+        })}
       </Svg>
       
       <View style={styles.centerInfo}>
@@ -186,7 +239,20 @@ export const TimeWheel: React.FC<TimeWheelProps> = ({ tasks, scheduledMinutes, d
       </View>
     </View>
   );
-};
+}, (prevProps, nextProps) => {
+  // Only re-render if tasks array changed or scheduledMinutes changed
+  return (
+    prevProps.tasks.length === nextProps.tasks.length &&
+    prevProps.scheduledMinutes === nextProps.scheduledMinutes &&
+    prevProps.dayName === nextProps.dayName &&
+    prevProps.tasks.every((task, index) =>
+      task.id === nextProps.tasks[index]?.id &&
+      task.startTime === nextProps.tasks[index]?.startTime &&
+      task.duration === nextProps.tasks[index]?.duration &&
+      task.category === nextProps.tasks[index]?.category
+    )
+  );
+});
 
 const styles = StyleSheet.create({
   container: {
@@ -194,40 +260,24 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     position: 'relative' as const,
   },
-  wheelShadow: {
-    position: 'absolute' as const,
-    width: WHEEL_SIZE - 40,
-    height: WHEEL_SIZE - 40,
-    borderRadius: (WHEEL_SIZE - 40) / 2,
-    backgroundColor: 'rgba(139, 122, 199, 0.1)',
-    shadowColor: '#8B7AC7',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.3,
-    shadowRadius: 24,
-    elevation: 12,
-  },
   centerInfo: {
     position: 'absolute' as const,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#0A0A0A',
-    borderRadius: 60,
-    width: 120,
-    height: 120,
-    borderWidth: 2,
-    borderColor: 'rgba(139, 122, 199, 0.3)',
+    backgroundColor: 'transparent',
   },
   dayLabel: {
-    fontSize: 20,
-    fontWeight: '800',
-    color: '#FFF',
+    fontSize: 14,
+    fontWeight: '700',
+    color: COLORS.text,
     letterSpacing: 1.5,
-    marginBottom: 6,
+    marginBottom: 4,
     textTransform: 'uppercase',
   },
   scheduledText: {
     fontSize: 12,
-    color: '#8B7AC7',
-    fontWeight: '600',
+    color: 'rgba(255, 255, 255, 0.7)',
+    fontWeight: '500',
+    letterSpacing: 0.3,
   },
 });

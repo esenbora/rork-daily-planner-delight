@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   View,
   Text,
@@ -10,25 +10,27 @@ import {
   Animated,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { ChevronLeft, ChevronRight, Plus, Crown, Clock, Calendar, CalendarDays, BarChart3, Target } from 'lucide-react-native';
+import { ChevronLeft, ChevronRight, Plus, Crown, Clock, Calendar, CalendarDays, BarChart3, Target, Settings, Menu, X } from 'lucide-react-native';
 import { useRouter } from 'expo-router';
 import { useTasks } from '@/contexts/TaskContext';
 import { useSubscription } from '@/contexts/SubscriptionContext';
 import { TimeWheel } from '@/components/TimeWheel';
-import { formatMonthDay, getDayName, addDays } from '@/utils/dateHelpers';
+import { formatMonthDay, getDayName, addDays, formatDate } from '@/utils/dateHelpers';
 import { AddTaskModal } from '@/components/AddTaskModal';
 import { OnboardingFlow } from '@/components/OnboardingFlow';
 import { Task } from '@/constants/types';
 import { TaskItem } from '@/components/TaskItem';
 import { TaskFilters, FilterState } from '@/components/TaskFilters';
+import { logAnalyticsEvent } from '@/lib/firebase';
 
 export default function PlannerScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { selectedDate, setSelectedDate, selectedDateTasks, scheduledMinutes, isLoading, hasCompletedOnboarding, markOnboardingComplete, deleteTask, toggleTaskCompletion } = useTasks();
+  const { selectedDate, setSelectedDate, selectedDateTasks, scheduledMinutes, isLoading, hasCompletedOnboarding, markOnboardingComplete, deleteTask, toggleTaskCompletion, addTask } = useTasks();
   const { canAddMoreTasks, isPremium } = useSubscription();
   const [isAddModalVisible, setIsAddModalVisible] = useState<boolean>(false);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
+  const [isMenuVisible, setIsMenuVisible] = useState<boolean>(false);
   const [filters, setFilters] = useState<FilterState>({
     search: '',
     categories: [],
@@ -53,6 +55,10 @@ export default function PlannerScreen() {
       }),
     ]).start();
     setSelectedDate(addDays(selectedDate, -1));
+    logAnalyticsEvent('date_navigation', {
+      direction: 'previous',
+      date: addDays(selectedDate, -1).toISOString(),
+    });
   };
 
   const handleNextDay = () => {
@@ -69,7 +75,21 @@ export default function PlannerScreen() {
       }),
     ]).start();
     setSelectedDate(addDays(selectedDate, 1));
+    logAnalyticsEvent('date_navigation', {
+      direction: 'next',
+      date: addDays(selectedDate, 1).toISOString(),
+    });
   };
+
+  // Track screen view
+  useEffect(() => {
+    if (!isLoading && hasCompletedOnboarding) {
+      logAnalyticsEvent('screen_view', {
+        screen_name: 'planner',
+        screen_class: 'PlannerScreen',
+      });
+    }
+  }, [isLoading, hasCompletedOnboarding]);
 
   React.useEffect(() => {
     if (!isLoading && hasCompletedOnboarding) {
@@ -91,9 +111,17 @@ export default function PlannerScreen() {
 
   const handleAddButtonPress = () => {
     if (!canAddMoreTasks(selectedDateTasks.length)) {
+      logAnalyticsEvent('task_limit_reached', {
+        current_count: selectedDateTasks.length,
+        is_premium: isPremium,
+      });
       router.push('/subscription');
       return;
     }
+
+    logAnalyticsEvent('add_task_button_tapped', {
+      task_count: selectedDateTasks.length,
+    });
 
     Animated.sequence([
       Animated.timing(buttonScale, {
@@ -113,6 +141,10 @@ export default function PlannerScreen() {
   };
 
   const handleEditTask = (task: Task) => {
+    logAnalyticsEvent('edit_task_tapped', {
+      task_id: task.id,
+      category: task.category,
+    });
     setEditingTask(task);
     setIsAddModalVisible(true);
   };
@@ -143,8 +175,38 @@ export default function PlannerScreen() {
     );
   }
 
+  const handleOnboardingComplete = async (firstTask?: {
+    title: string;
+    category: string;
+    startHour: number;
+    startMinute: number;
+    duration: number;
+  }) => {
+    if (firstTask) {
+      try {
+        const startTime = firstTask.startHour * 60 + firstTask.startMinute;
+        await addTask({
+          title: firstTask.title,
+          category: firstTask.category as any,
+          startTime: startTime,
+          duration: firstTask.duration,
+          date: formatDate(new Date()),
+          completed: false,
+          priority: 'medium',
+          repeatType: 'none',
+        });
+      } catch (error) {
+        console.error('Failed to add first task:', error);
+      }
+    }
+    markOnboardingComplete();
+
+    // Redirect to paywall after onboarding
+    router.push('/subscription?source=onboarding');
+  };
+
   if (!hasCompletedOnboarding) {
-    return <OnboardingFlow onComplete={markOnboardingComplete} />;
+    return <OnboardingFlow onComplete={handleOnboardingComplete} />;
   }
 
   return (
@@ -153,42 +215,29 @@ export default function PlannerScreen() {
       <StatusBar barStyle="light-content" />
       
       <View style={[styles.header, { paddingTop: insets.top }]}>
-        <TouchableOpacity 
-          style={styles.iconButton}
-          onPress={() => router.push('/subscription')}
+        <TouchableOpacity
+          style={styles.menuButton}
+          onPress={() => setIsMenuVisible(true)}
         >
-          <Crown color="#FFD700" size={20} fill={isPremium ? "#FFD700" : "none"} />
+          <Menu color="#FFF" size={24} />
         </TouchableOpacity>
-        
+
         <View style={styles.dateSelector}>
           <TouchableOpacity onPress={handlePreviousDay} style={styles.chevronButton}>
             <ChevronLeft color="#FFF" size={20} />
           </TouchableOpacity>
-          
+
           <View style={styles.dateInfo}>
             <Text style={styles.dateText}>{formatMonthDay(selectedDate)}</Text>
             <Text style={styles.dayText}>{getDayName(selectedDate)}</Text>
           </View>
-          
+
           <TouchableOpacity onPress={handleNextDay} style={styles.chevronButton}>
             <ChevronRight color="#FFF" size={20} />
           </TouchableOpacity>
         </View>
-        
-        <View style={styles.headerActions}>
-          <TouchableOpacity 
-            style={styles.iconButton}
-            onPress={() => router.push('/weekly')}
-          >
-            <CalendarDays color="#FFF" size={20} />
-          </TouchableOpacity>
-          <TouchableOpacity 
-            style={styles.iconButton}
-            onPress={() => router.push('/statistics')}
-          >
-            <BarChart3 color="#FFF" size={20} />
-          </TouchableOpacity>
-        </View>
+
+        <View style={styles.headerSpacer} />
       </View>
 
       <ScrollView 
@@ -207,19 +256,12 @@ export default function PlannerScreen() {
             ]}
           >
             <View style={styles.emptyIcon}>
-              <Clock size={64} color="#8B7AC7" strokeWidth={1.5} />
+              <Clock size={64} color="#FF8C42" strokeWidth={1.5} />
             </View>
             <Text style={styles.emptyTitle}>Your Day Awaits</Text>
             <Text style={styles.emptyDescription}>
-              Start planning by adding your first task
+              Start planning by adding your first task. Tap "New Task" below to begin.
             </Text>
-            <TouchableOpacity 
-              style={styles.emptyButton}
-              onPress={handleAddButtonPress}
-            >
-              <Plus size={18} color="#FFF" strokeWidth={2.5} />
-              <Text style={styles.emptyButtonText}>Add Your First Task</Text>
-            </TouchableOpacity>
           </Animated.View>
         ) : (
           <Animated.View 
@@ -242,7 +284,7 @@ export default function PlannerScreen() {
             <View style={styles.tasksSection}>
               <View style={styles.tasksSectionHeader}>
                 <View style={styles.tasksSectionTitleContainer}>
-                  <Calendar size={18} color="#8B7AC7" />
+                  <Calendar size={18} color="#FF8C42" />
                   <Text style={styles.tasksSectionTitle}>Today&apos;s Tasks</Text>
                 </View>
                 <Text style={styles.taskCount}>{selectedDateTasks.length}</Text>
@@ -272,8 +314,8 @@ export default function PlannerScreen() {
 
               <View style={styles.statsCard}>
                 <View style={styles.statItem}>
-                  <View style={[styles.statIcon, { backgroundColor: '#4A9B9B20' }]}>
-                    <Clock size={20} color="#4A9B9B" />
+                  <View style={[styles.statIcon, { backgroundColor: 'rgba(255, 140, 66, 0.15)' }]}>
+                    <Clock size={20} color="#FF8C42" />
                   </View>
                   <View style={styles.statInfo}>
                     <Text style={styles.statValue}>{Math.round(scheduledMinutes / 60)}h</Text>
@@ -282,8 +324,8 @@ export default function PlannerScreen() {
                 </View>
                 <View style={styles.statDivider} />
                 <View style={styles.statItem}>
-                  <View style={[styles.statIcon, { backgroundColor: '#7AC79B20' }]}>
-                    <Clock size={20} color="#7AC79B" />
+                  <View style={[styles.statIcon, { backgroundColor: 'rgba(0, 217, 163, 0.15)' }]}>
+                    <Clock size={20} color="#00D9A3" />
                   </View>
                   <View style={styles.statInfo}>
                     <Text style={styles.statValue}>{Math.round((1440 - scheduledMinutes) / 60)}h</Text>
@@ -344,6 +386,106 @@ export default function PlannerScreen() {
           }}
         />
       </Modal>
+
+      <Modal
+        visible={isMenuVisible}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setIsMenuVisible(false)}
+      >
+        <View style={styles.menuOverlay}>
+          <TouchableOpacity
+            style={styles.menuBackdrop}
+            activeOpacity={1}
+            onPress={() => setIsMenuVisible(false)}
+          />
+          <View style={[styles.menuContainer, { paddingTop: insets.top }]}>
+            <View style={styles.menuHeader}>
+              <Text style={styles.menuTitle}>Menu</Text>
+              <TouchableOpacity
+                style={styles.menuCloseButton}
+                onPress={() => setIsMenuVisible(false)}
+              >
+                <X color="#FFF" size={24} />
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.menuItems}>
+              <TouchableOpacity
+                style={styles.menuItem}
+                onPress={() => {
+                  setIsMenuVisible(false);
+                  router.push('/subscription');
+                }}
+              >
+                <View style={[styles.menuItemIcon, { backgroundColor: 'rgba(255, 215, 0, 0.15)' }]}>
+                  <Crown color="#FFD700" size={24} fill={isPremium ? "#FFD700" : "none"} />
+                </View>
+                <View style={styles.menuItemContent}>
+                  <Text style={styles.menuItemTitle}>
+                    {isPremium ? 'Premium Account' : 'Upgrade to Premium'}
+                  </Text>
+                  <Text style={styles.menuItemDescription}>
+                    {isPremium ? 'Manage your subscription' : 'Unlock unlimited tasks & features'}
+                  </Text>
+                </View>
+                <ChevronRight color="#888" size={20} />
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.menuItem}
+                onPress={() => {
+                  setIsMenuVisible(false);
+                  router.push('/weekly');
+                }}
+              >
+                <View style={[styles.menuItemIcon, { backgroundColor: 'rgba(255, 140, 66, 0.15)' }]}>
+                  <CalendarDays color="#FF8C42" size={24} />
+                </View>
+                <View style={styles.menuItemContent}>
+                  <Text style={styles.menuItemTitle}>Weekly View</Text>
+                  <Text style={styles.menuItemDescription}>See your week at a glance</Text>
+                </View>
+                <ChevronRight color="#888" size={20} />
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.menuItem}
+                onPress={() => {
+                  setIsMenuVisible(false);
+                  router.push('/statistics');
+                }}
+              >
+                <View style={[styles.menuItemIcon, { backgroundColor: 'rgba(0, 217, 163, 0.15)' }]}>
+                  <BarChart3 color="#00D9A3" size={24} />
+                </View>
+                <View style={styles.menuItemContent}>
+                  <Text style={styles.menuItemTitle}>Statistics</Text>
+                  <Text style={styles.menuItemDescription}>Track your productivity</Text>
+                </View>
+                <ChevronRight color="#888" size={20} />
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.menuItem}
+                onPress={() => {
+                  setIsMenuVisible(false);
+                  router.push('/settings');
+                }}
+              >
+                <View style={[styles.menuItemIcon, { backgroundColor: 'rgba(255, 140, 66, 0.15)' }]}>
+                  <Settings color="#FF8C42" size={24} />
+                </View>
+                <View style={styles.menuItemContent}>
+                  <Text style={styles.menuItemTitle}>Settings</Text>
+                  <Text style={styles.menuItemDescription}>Customize your experience</Text>
+                </View>
+                <ChevronRight color="#888" size={20} />
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -372,16 +514,17 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingVertical: 20,
     zIndex: 10,
+    position: 'relative' as const,
   },
-  iconButton: {
+  menuButton: {
     width: 40,
     height: 40,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  headerActions: {
-    flexDirection: 'row',
-    gap: 8,
+  headerSpacer: {
+    width: 40,
+    height: 40,
   },
   dateSelector: {
     flexDirection: 'row',
@@ -428,13 +571,13 @@ const styles = StyleSheet.create({
   emptyIcon: {
     width: 140,
     height: 140,
-    backgroundColor: 'rgba(139, 122, 199, 0.1)',
+    backgroundColor: 'rgba(255, 140, 66, 0.1)',
     borderRadius: 70,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 32,
     borderWidth: 2,
-    borderColor: 'rgba(139, 122, 199, 0.2)',
+    borderColor: 'rgba(255, 140, 66, 0.2)',
   },
   emptyTitle: {
     fontSize: 28,
@@ -454,7 +597,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#8B7AC7',
+    backgroundColor: '#FF8C42',
     borderRadius: 12,
     paddingVertical: 14,
     paddingHorizontal: 24,
@@ -496,8 +639,8 @@ const styles = StyleSheet.create({
   taskCount: {
     fontSize: 15,
     fontWeight: '600',
-    color: '#8B7AC7',
-    backgroundColor: '#8B7AC720',
+    color: '#00D9A3',
+    backgroundColor: 'rgba(0, 217, 163, 0.15)',
     paddingHorizontal: 12,
     paddingVertical: 4,
     borderRadius: 12,
@@ -593,12 +736,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#6B8ACF',
+    backgroundColor: '#00D9A3',
     borderRadius: 14,
     paddingVertical: 16,
     gap: 8,
     marginTop: 12,
-    shadowColor: '#6B8ACF',
+    shadowColor: '#00D9A3',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 8,
@@ -626,11 +769,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#8B7AC7',
+    backgroundColor: '#FF8C42',
     borderRadius: 16,
     paddingVertical: 18,
     gap: 8,
-    shadowColor: '#8B7AC7',
+    shadowColor: '#FF8C42',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.4,
     shadowRadius: 12,
@@ -641,5 +784,83 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#FFF',
     letterSpacing: 0.3,
+  },
+  menuOverlay: {
+    flex: 1,
+    justifyContent: 'flex-start',
+  },
+  menuBackdrop: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+  },
+  menuContainer: {
+    backgroundColor: '#0A0A0A',
+    borderBottomLeftRadius: 24,
+    borderBottomRightRadius: 24,
+    paddingBottom: 32,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.5,
+    shadowRadius: 16,
+    elevation: 24,
+  },
+  menuHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingVertical: 24,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255, 255, 255, 0.08)',
+  },
+  menuTitle: {
+    fontSize: 24,
+    fontWeight: '800',
+    color: '#FFF',
+    letterSpacing: 0.3,
+  },
+  menuCloseButton: {
+    width: 40,
+    height: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    borderRadius: 12,
+  },
+  menuItems: {
+    paddingHorizontal: 20,
+    paddingTop: 16,
+    gap: 12,
+  },
+  menuItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.03)',
+    borderRadius: 16,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.05)',
+  },
+  menuItemIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 14,
+  },
+  menuItemContent: {
+    flex: 1,
+  },
+  menuItemTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#FFF',
+    marginBottom: 4,
+  },
+  menuItemDescription: {
+    fontSize: 13,
+    color: '#888',
+    lineHeight: 18,
   },
 });
