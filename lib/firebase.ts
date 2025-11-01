@@ -48,6 +48,15 @@ try {
 } catch (error) {
   console.error('❌ Firebase initialization failed:', error);
   console.error('⚠️  App will run in offline mode without cloud sync');
+  console.error('Firebase config status:', {
+    apiKey: config.firebaseApiKey ? '✓ present' : '✗ missing',
+    authDomain: config.firebaseAuthDomain ? '✓ present' : '✗ missing',
+    projectId: config.firebaseProjectId ? '✓ present' : '✗ missing',
+    storageBucket: config.firebaseStorageBucket ? '✓ present' : '✗ missing',
+    messagingSenderId: config.firebaseMessagingSenderId ? '✓ present' : '✗ missing',
+    appId: config.firebaseAppId ? '✓ present' : '✗ missing',
+    measurementId: config.firebaseMeasurementId ? '✓ present' : '✗ missing',
+  });
 }
 
 // Initialize Analytics (only on web or if supported)

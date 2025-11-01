@@ -68,6 +68,14 @@ export function subscribeToTasks(
     return () => {};
   }
 
+  // Check if Firestore is initialized
+  if (!firestore) {
+    console.error('Firestore is not initialized - cannot subscribe to tasks');
+    const error = new Error('Firestore unavailable');
+    onError?.(error);
+    return () => {};
+  }
+
   const tasksRef = collection(firestore, 'users', userId, 'tasks');
   const q = query(tasksRef, orderBy('date', 'asc'), orderBy('order', 'asc'));
 
@@ -99,6 +107,10 @@ export async function addTaskToFirestore(
   userId: string,
   task: Omit<Task, 'id'>
 ): Promise<string> {
+  if (!firestore) {
+    throw new Error('Firestore is not initialized');
+  }
+
   try {
     const tasksRef = collection(firestore, 'users', userId, 'tasks');
     const docRef = await addDoc(tasksRef, taskToFirestore(task));
@@ -125,6 +137,10 @@ export async function updateTaskInFirestore(
   taskId: string,
   updates: Partial<Task>
 ): Promise<void> {
+  if (!firestore) {
+    throw new Error('Firestore is not initialized');
+  }
+
   try {
     const taskRef = doc(firestore, 'users', userId, 'tasks', taskId);
     await updateDoc(taskRef, {
@@ -149,6 +165,10 @@ export async function deleteTaskFromFirestore(
   userId: string,
   taskId: string
 ): Promise<void> {
+  if (!firestore) {
+    throw new Error('Firestore is not initialized');
+  }
+
   try {
     const taskRef = doc(firestore, 'users', userId, 'tasks', taskId);
     await deleteDoc(taskRef);

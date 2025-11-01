@@ -60,7 +60,12 @@ export async function initializeRevenueCat(userId?: string): Promise<void> {
     }
   } catch (error) {
     logError(error as Error, { context: 'initializeRevenueCat' });
-    console.error('⚠️  RevenueCat initialization failed. Subscription features will be unavailable.');
+    console.error('❌ RevenueCat initialization failed:', error);
+    console.error('⚠️  Subscription features will be unavailable.');
+    console.error('RevenueCat config status:', {
+      iosApiKey: config.revenuecatIosApiKey ? '✓ present' : '✗ missing',
+      platform: Platform.OS,
+    });
     // Don't throw - allow app to continue without subscription features
   }
 }
