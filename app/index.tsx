@@ -24,83 +24,10 @@ import { TaskFilters, FilterState } from '@/components/TaskFilters';
 import { logAnalyticsEvent } from '@/lib/firebase';
 
 export default function PlannerScreen() {
-  // Debug: Track component mount
-  console.log('🔍 PlannerScreen: Component rendering');
-
-  const [debugInfo, setDebugInfo] = useState<string>('Initializing...');
-
-  let insets;
-  let router;
-  let taskContext;
-  let subscriptionContext;
-
-  try {
-    console.log('🔍 PlannerScreen: Getting insets');
-    insets = useSafeAreaInsets();
-    setDebugInfo('SafeArea OK');
-  } catch (error) {
-    console.error('❌ SafeAreaInsets failed:', error);
-    setDebugInfo('SafeArea FAILED: ' + (error as Error).message);
-    return (
-      <View style={{ flex: 1, backgroundColor: '#000', justifyContent: 'center', alignItems: 'center', padding: 20 }}>
-        <Text style={{ color: '#ff0000', fontSize: 18, fontWeight: 'bold' }}>SafeAreaInsets Error</Text>
-        <Text style={{ color: '#fff', marginTop: 10, textAlign: 'center' }}>{(error as Error).message}</Text>
-      </View>
-    );
-  }
-
-  try {
-    console.log('🔍 PlannerScreen: Getting router');
-    router = useRouter();
-    setDebugInfo('Router OK');
-  } catch (error) {
-    console.error('❌ Router failed:', error);
-    return (
-      <View style={{ flex: 1, backgroundColor: '#000', justifyContent: 'center', alignItems: 'center', padding: 20 }}>
-        <Text style={{ color: '#ff0000', fontSize: 18, fontWeight: 'bold' }}>Router Error</Text>
-        <Text style={{ color: '#fff', marginTop: 10, textAlign: 'center' }}>{(error as Error).message}</Text>
-      </View>
-    );
-  }
-
-  try {
-    console.log('🔍 PlannerScreen: Getting task context');
-    taskContext = useTasks();
-    setDebugInfo('TaskContext OK');
-  } catch (error) {
-    console.error('❌ TaskContext failed:', error);
-    return (
-      <View style={{ flex: 1, backgroundColor: '#000', justifyContent: 'center', alignItems: 'center', padding: 20 }}>
-        <Text style={{ color: '#ff0000', fontSize: 18, fontWeight: 'bold' }}>TaskContext Error</Text>
-        <Text style={{ color: '#fff', marginTop: 10, textAlign: 'center' }}>{(error as Error).message}</Text>
-      </View>
-    );
-  }
-
-  try {
-    console.log('🔍 PlannerScreen: Getting subscription context');
-    subscriptionContext = useSubscription();
-    setDebugInfo('SubscriptionContext OK');
-  } catch (error) {
-    console.error('❌ SubscriptionContext failed:', error);
-    return (
-      <View style={{ flex: 1, backgroundColor: '#000', justifyContent: 'center', alignItems: 'center', padding: 20 }}>
-        <Text style={{ color: '#ff0000', fontSize: 18, fontWeight: 'bold' }}>SubscriptionContext Error</Text>
-        <Text style={{ color: '#fff', marginTop: 10, textAlign: 'center' }}>{(error as Error).message}</Text>
-      </View>
-    );
-  }
-
-  const { selectedDate, setSelectedDate, selectedDateTasks, scheduledMinutes, isLoading, hasCompletedOnboarding, markOnboardingComplete, deleteTask, toggleTaskCompletion, addTask } = taskContext;
-  const { canAddMoreTasks, isPremium } = subscriptionContext;
-
-  console.log('🔍 PlannerScreen: Context values -', {
-    isLoading,
-    hasCompletedOnboarding,
-    tasksCount: selectedDateTasks?.length,
-    isPremium,
-  });
-
+  const insets = useSafeAreaInsets();
+  const router = useRouter();
+  const { selectedDate, setSelectedDate, selectedDateTasks, scheduledMinutes, isLoading, hasCompletedOnboarding, markOnboardingComplete, deleteTask, toggleTaskCompletion, addTask } = useTasks();
+  const { canAddMoreTasks, isPremium } = useSubscription();
   const [isAddModalVisible, setIsAddModalVisible] = useState<boolean>(false);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
   const [isMenuVisible, setIsMenuVisible] = useState<boolean>(false);
@@ -241,13 +168,9 @@ export default function PlannerScreen() {
   }, [selectedDateTasks, filters]);
 
   if (isLoading) {
-    console.log('🔍 PlannerScreen: Showing loading screen');
     return (
       <View style={[styles.container, styles.loadingContainer]}>
         <StatusBar barStyle="light-content" />
-        <View style={{ position: 'absolute', top: 50, left: 0, right: 0, backgroundColor: '#ff0000', padding: 10 }}>
-          <Text style={{ color: '#fff', textAlign: 'center', fontWeight: 'bold' }}>DEBUG: Loading...</Text>
-        </View>
       </View>
     );
   }
@@ -283,23 +206,11 @@ export default function PlannerScreen() {
   };
 
   if (!hasCompletedOnboarding) {
-    console.log('🔍 PlannerScreen: Showing onboarding flow');
-    return (
-      <View style={{ flex: 1 }}>
-        <View style={{ position: 'absolute', top: 50, left: 0, right: 0, backgroundColor: '#0000ff', padding: 10, zIndex: 9999 }}>
-          <Text style={{ color: '#fff', textAlign: 'center', fontWeight: 'bold' }}>DEBUG: Onboarding</Text>
-        </View>
-        <OnboardingFlow onComplete={handleOnboardingComplete} />
-      </View>
-    );
+    return <OnboardingFlow onComplete={handleOnboardingComplete} />;
   }
 
-  console.log('🔍 PlannerScreen: Rendering main UI');
   return (
     <View style={styles.container}>
-      <View style={{ position: 'absolute', top: 50, left: 0, right: 0, backgroundColor: '#00ff00', padding: 10, zIndex: 9999 }}>
-        <Text style={{ color: '#000', textAlign: 'center', fontWeight: 'bold' }}>DEBUG: Main UI Rendering - {isPremium ? 'Premium' : 'Free'}</Text>
-      </View>
       <View style={[styles.backgroundGradient, { height: insets.top + 200 }]} />
       <StatusBar barStyle="light-content" />
       

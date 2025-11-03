@@ -57,39 +57,90 @@ export const [SubscriptionProvider, useSubscription] = createContextHook(() => {
    * Initialize RevenueCat SDK and load subscription status
    */
   const initialize = useCallback(async () => {
+    console.log('💳 SubscriptionContext: Starting initialization...');
+
     try {
       setIsLoading(true);
       setError(null);
 
       // Get current user ID if authenticated
-      const userId = getCurrentUserId();
+      let userId: string | null = null;
+      try {
+        userId = getCurrentUserId();
+        console.log('💳 User ID:', userId ? 'present' : 'none');
+      } catch (userIdError) {
+        console.warn('⚠️  Could not get user ID:', userIdError);
+        // Continue without user ID
+      }
 
       // Initialize RevenueCat
-      await initializeRevenueCat(userId || undefined);
-      setIsInitialized(true);
+      console.log('💳 Initializing RevenueCat SDK...');
+      try {
+        await initializeRevenueCat(userId || undefined);
+        setIsInitialized(true);
+        console.log('✅ RevenueCat SDK initialized');
+      } catch (rcError) {
+        console.error('❌ RevenueCat initialization failed:', rcError);
+        // Don't throw - continue with free tier
+      }
 
       // Load current subscription status
-      const status = await getSubscriptionStatus();
+      console.log('💳 Loading subscription status...');
+      let status: SubscriptionStatus;
+      try {
+        status = await getSubscriptionStatus();
+        console.log('✅ Subscription status loaded:', status.tier);
+      } catch (statusError) {
+        console.error('❌ Failed to load subscription status:', statusError);
+        // Fallback to free tier
+        status = {
+          tier: 'free',
+          isPremium: false,
+          willRenew: false,
+        };
+      }
+
       updateSubscriptionState(status);
 
       // Load available offerings
-      const offerings = await getOfferings();
-      setCurrentOffering(offerings);
+      console.log('💳 Loading offerings...');
+      try {
+        const offerings = await getOfferings();
+        setCurrentOffering(offerings);
+        console.log('✅ Offerings loaded:', offerings ? 'available' : 'none');
+      } catch (offeringsError) {
+        console.error('❌ Failed to load offerings:', offeringsError);
+        setCurrentOffering(null);
+      }
 
       logAnalyticsEvent('subscription_context_initialized', {
         tier: status.tier,
         is_premium: status.isPremium,
         has_user_id: !!userId,
       });
+
+      console.log('✅ SubscriptionContext initialization complete');
     } catch (error) {
-      console.error('Failed to initialize subscription context:', error);
+      console.error('❌ Fatal error in subscription context initialization:', error);
       logError(error as Error, { context: 'SubscriptionContext.initialize' });
       setError('Failed to load subscription status');
 
-      // Try to load from cache
-      await loadFromCache();
+      // Try to load from cache as last resort
+      try {
+        await loadFromCache();
+        console.log('✅ Loaded subscription from cache');
+      } catch (cacheError) {
+        console.error('❌ Cache load failed:', cacheError);
+        // Set to free tier as ultimate fallback
+        updateSubscriptionState({
+          tier: 'free',
+          isPremium: false,
+          willRenew: false,
+        });
+      }
     } finally {
       setIsLoading(false);
+      console.log('💳 SubscriptionContext: Initialization finished, loading =', false);
     }
   }, []);
 

@@ -113,61 +113,87 @@ export const [TaskProvider, useTasks] = createContextHook(() => {
   // Initialize: Check auth and set up appropriate data source
   useEffect(() => {
     const initialize = async () => {
-      const authenticated = isUserAuthenticated();
-      const userId = getCurrentUserId();
+      console.log('📋 TaskContext: Starting initialization...');
 
-      if (authenticated && userId) {
-        console.log('User authenticated, using Firestore');
-        setUseFirestore(true);
-        setIsSyncing(true);
+      try {
+        let authenticated = false;
+        let userId: string | null = null;
 
         try {
-          // Attempt one-time migration
-          await attemptMigration(userId);
-
-          // Subscribe to Firestore
-          const unsubscribe = subscribeToTasks(
-            userId,
-            (firestoreTasks) => {
-              setTasks(firestoreTasks);
-              setIsLoading(false);
-              setIsSyncing(false);
-              setSyncError(null);
-
-              // Cache to AsyncStorage
-              saveToAsyncStorage(firestoreTasks);
-            },
-            (error) => {
-              logError(error, { context: 'firestoreSubscription' });
-              console.error('Firestore subscription error:', error);
-              setSyncError('Failed to sync. Using offline mode.');
-              setIsSyncing(false);
-
-              // Fallback to AsyncStorage
-              loadFromAsyncStorage();
-            }
-          );
-
-          unsubscribeRef.current = unsubscribe;
-        } catch (error) {
-          logError(error as Error, { context: 'firestoreInitialization' });
-          console.error('Failed to initialize Firestore:', error);
-          setSyncError('Sync unavailable. Using offline mode.');
-          setUseFirestore(false);
-          loadFromAsyncStorage();
+          authenticated = isUserAuthenticated();
+          userId = getCurrentUserId();
+          console.log('📋 Authentication:', { authenticated, hasUserId: !!userId });
+        } catch (authError) {
+          console.warn('⚠️  Could not check authentication:', authError);
         }
-      } else {
-        console.log('No user authentication, using AsyncStorage');
+
+        if (authenticated && userId) {
+          console.log('📋 User authenticated, using Firestore');
+          setUseFirestore(true);
+          setIsSyncing(true);
+
+          try {
+            await attemptMigration(userId);
+
+            const unsubscribe = subscribeToTasks(
+              userId,
+              (firestoreTasks) => {
+                setTasks(firestoreTasks);
+                setIsLoading(false);
+                setIsSyncing(false);
+                setSyncError(null);
+                saveToAsyncStorage(firestoreTasks);
+              },
+              (error) => {
+                logError(error, { context: 'firestoreSubscription' });
+                console.error('❌ Firestore subscription error:', error);
+                setSyncError('Failed to sync. Using offline mode.');
+                setIsSyncing(false);
+                loadFromAsyncStorage();
+              }
+            );
+
+            unsubscribeRef.current = unsubscribe;
+          } catch (error) {
+            logError(error as Error, { context: 'firestoreInitialization' });
+            console.error('❌ Failed to initialize Firestore:', error);
+            setSyncError('Sync unavailable. Using offline mode.');
+            setUseFirestore(false);
+            await loadFromAsyncStorage();
+          }
+        } else {
+          console.log('📋 No user authentication, using AsyncStorage');
+          setUseFirestore(false);
+          await loadFromAsyncStorage();
+        }
+
+        console.log('✅ TaskContext initialization complete');
+      } catch (error) {
+        console.error('❌ Fatal TaskContext error:', error);
+        logError(error as Error, { context: 'TaskContext.initialize' });
         setUseFirestore(false);
-        loadFromAsyncStorage();
+        setIsSyncing(false);
+        try {
+          await loadFromAsyncStorage();
+        } catch {
+          setTasks([]);
+          setIsLoading(false);
+        }
       }
     };
 
-    initialize();
+    initialize().catch(() => {
+      setTasks([]);
+      setIsLoading(false);
+    });
 
     return () => {
       if (unsubscribeRef.current) {
-        unsubscribeRef.current();
+        try {
+          unsubscribeRef.current();
+        } catch (error) {
+          console.error('❌ Error unsubscribing:', error);
+        }
       }
     };
   }, [attemptMigration, loadFromAsyncStorage, saveToAsyncStorage]);

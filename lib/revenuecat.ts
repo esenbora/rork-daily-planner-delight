@@ -34,38 +34,79 @@ export interface SubscriptionStatus {
   productIdentifier?: string;
 }
 
+// Track initialization state
+let revenueCatInitialized = false;
+let revenueCatError: Error | null = null;
+
+/**
+ * Check if RevenueCat SDK is properly initialized
+ */
+export const isRevenueCatAvailable = (): boolean => {
+  return revenueCatInitialized && !revenueCatError;
+};
+
 /**
  * Initialize RevenueCat SDK
  * Should be called once at app startup
  */
 export async function initializeRevenueCat(userId?: string): Promise<void> {
+  // Check if API key is available
+  if (!config.revenuecatIosApiKey || config.revenuecatIosApiKey.length === 0) {
+    console.warn('⚠️  RevenueCat API key not configured - skipping initialization');
+    console.warn('Subscription features will be unavailable.');
+    revenueCatError = new Error('RevenueCat API key not configured');
+    return;
+  }
+
+  // Only initialize on iOS
+  if (Platform.OS !== 'ios') {
+    console.warn('⚠️  RevenueCat only configured for iOS - skipping on', Platform.OS);
+    revenueCatError = new Error('Platform not supported');
+    return;
+  }
+
   try {
-    if (Platform.OS === 'ios') {
-      // Configure SDK
+    console.log('💰 Attempting RevenueCat initialization...');
+
+    // Configure SDK with verbose logging
+    try {
       Purchases.setLogLevel(LOG_LEVEL.DEBUG); // Use DEBUG in development, INFO in production
-
-      // Initialize with API key
-      Purchases.configure({
-        apiKey: config.revenuecatIosApiKey,
-        appUserID: userId, // Optional: link purchases to your user ID
-      });
-
-      logAnalyticsEvent('revenuecat_initialized', {
-        has_user_id: !!userId,
-      });
-
-      console.log('RevenueCat initialized successfully');
-    } else {
-      console.warn('RevenueCat only configured for iOS');
+      console.log('✅ RevenueCat log level set');
+    } catch (logError) {
+      console.warn('⚠️  Could not set RevenueCat log level:', logError);
+      // Continue anyway
     }
+
+    // Initialize with API key
+    console.log('💰 Configuring RevenueCat SDK...');
+    Purchases.configure({
+      apiKey: config.revenuecatIosApiKey,
+      appUserID: userId, // Optional: link purchases to your user ID
+    });
+    console.log('✅ RevenueCat SDK configured');
+
+    // Mark as initialized
+    revenueCatInitialized = true;
+    revenueCatError = null;
+
+    logAnalyticsEvent('revenuecat_initialized', {
+      has_user_id: !!userId,
+    });
+
+    console.log('✅ RevenueCat initialization complete');
   } catch (error) {
+    revenueCatInitialized = false;
+    revenueCatError = error as Error;
+
     logError(error as Error, { context: 'initializeRevenueCat' });
     console.error('❌ RevenueCat initialization failed:', error);
     console.error('⚠️  Subscription features will be unavailable.');
     console.error('RevenueCat config status:', {
       iosApiKey: config.revenuecatIosApiKey ? '✓ present' : '✗ missing',
       platform: Platform.OS,
+      errorMessage: (error as Error).message,
     });
+
     // Don't throw - allow app to continue without subscription features
   }
 }
@@ -102,6 +143,16 @@ export async function logoutUser(): Promise<void> {
  * Get current customer info and subscription status
  */
 export async function getSubscriptionStatus(): Promise<SubscriptionStatus> {
+  // Return free tier if RevenueCat not available
+  if (!isRevenueCatAvailable()) {
+    console.warn('⚠️  RevenueCat not available - returning free tier');
+    return {
+      tier: 'free',
+      isPremium: false,
+      willRenew: false,
+    };
+  }
+
   try {
     const customerInfo = await Purchases.getCustomerInfo();
     return parseCustomerInfo(customerInfo);
@@ -154,6 +205,11 @@ function parseCustomerInfo(customerInfo: CustomerInfo): SubscriptionStatus {
  * Get available offerings (subscription packages)
  */
 export async function getOfferings(): Promise<PurchasesOffering | null> {
+  if (!isRevenueCatAvailable()) {
+    console.warn('⚠️  RevenueCat not available - cannot fetch offerings');
+    return null;
+  }
+
   try {
     const offerings = await Purchases.getOfferings();
 
@@ -290,21 +346,33 @@ export async function getProductPricing(): Promise<{
 export function setupCustomerInfoUpdateListener(
   callback: (status: SubscriptionStatus) => void
 ): () => void {
-  const remove = Purchases.addCustomerInfoUpdateListener(customerInfo => {
-    const status = parseCustomerInfo(customerInfo);
+  if (!isRevenueCatAvailable()) {
+    console.warn('⚠️  RevenueCat not available - cannot set up listener');
+    // Return no-op cleanup function
+    return () => {};
+  }
 
-    logAnalyticsEvent('subscription_status_changed', {
-      tier: status.tier,
-      is_premium: status.isPremium,
+  try {
+    const remove = Purchases.addCustomerInfoUpdateListener(customerInfo => {
+      const status = parseCustomerInfo(customerInfo);
+
+      logAnalyticsEvent('subscription_status_changed', {
+        tier: status.tier,
+        is_premium: status.isPremium,
+      });
+
+      callback(status);
     });
 
-    callback(status);
-  });
-
-  // Return cleanup function
-  return () => {
-    remove();
-  };
+    // Return cleanup function
+    return () => {
+      remove();
+    };
+  } catch (error) {
+    console.error('❌ Failed to set up RevenueCat listener:', error);
+    // Return no-op cleanup function
+    return () => {};
+  }
 }
 
 /**
