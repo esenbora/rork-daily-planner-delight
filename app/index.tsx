@@ -193,12 +193,16 @@ export default function PlannerScreen() {
           category: firstTask.category as any,
           startTime: startTime,
           duration: firstTask.duration,
-          date: formatDate(new Date()),
+          date: formatDate(selectedDate),
           completed: false,
           priority: 'medium',
           repeatType: 'none',
         });
-        console.log('✅ First task added successfully, marking onboarding complete');
+        console.log('✅ First task added successfully');
+
+        // Wait for state to settle before marking onboarding complete
+        await new Promise(resolve => setTimeout(resolve, 150));
+        console.log('✅ State settled, marking onboarding complete');
       } catch (error) {
         console.error('❌ Failed to add first task:', error);
       }

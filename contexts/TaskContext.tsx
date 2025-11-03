@@ -50,6 +50,7 @@ export const [TaskProvider, useTasks] = createContextHook(() => {
   const unsubscribeRef = useRef<(() => void) | null>(null);
   const migrationAttemptedRef = useRef<boolean>(false);
   const savingRef = useRef<boolean>(false); // Prevents race condition between manual save and auto-save
+  const saveToAsyncStorageRef = useRef<(tasks: Task[]) => Promise<void>>(() => Promise.resolve());
 
   // Load tasks from AsyncStorage (fallback/offline mode)
   const loadFromAsyncStorage = useCallback(async () => {
@@ -81,6 +82,11 @@ export const [TaskProvider, useTasks] = createContextHook(() => {
       console.error('Failed to save tasks to AsyncStorage:', error);
     }
   }, []);
+
+  // Keep ref updated with latest saveToAsyncStorage function
+  useEffect(() => {
+    saveToAsyncStorageRef.current = saveToAsyncStorage;
+  }, [saveToAsyncStorage]);
 
   // Migrate local tasks to Firestore (one-time operation)
   const attemptMigration = useCallback(async (userId: string) => {
@@ -202,12 +208,13 @@ export const [TaskProvider, useTasks] = createContextHook(() => {
   // Save to AsyncStorage when tasks change (offline mode only)
   // NOTE: We removed tasks.length > 0 check to allow saving even empty task list (first task scenario)
   // NOTE: savingRef prevents race condition between manual saves (addTask/updateTask/deleteTask) and auto-save
+  // NOTE: Using ref instead of direct function to avoid stale closure issues
   useEffect(() => {
     if (!useFirestore && !isLoading && !savingRef.current) {
       console.log('💾 Auto-save triggered, tasks count:', tasks.length);
-      saveToAsyncStorage(tasks);
+      saveToAsyncStorageRef.current(tasks);
     }
-  }, [tasks, useFirestore, isLoading, saveToAsyncStorage]);
+  }, [tasks, useFirestore, isLoading]);
 
   // Add task (works with both Firestore and AsyncStorage)
   const addTask = useCallback(
@@ -229,6 +236,7 @@ export const [TaskProvider, useTasks] = createContextHook(() => {
 
           console.log('✅ Task added to Firestore successfully');
           // Real-time listener will update state automatically
+          return fullTask;
         } catch (error) {
           logError(error as Error, { context: 'addTask', userId });
           console.error('❌ Failed to add task to Firestore:', error);
@@ -265,6 +273,22 @@ export const [TaskProvider, useTasks] = createContextHook(() => {
           console.log('💾 Saving to AsyncStorage...');
           await saveToAsyncStorage(updatedTasks);
           console.log('✅ Task saved to AsyncStorage successfully');
+
+          // VERIFICATION: Confirm the save worked
+          try {
+            const verification = await AsyncStorage.getItem(STORAGE_KEY);
+            const verifiedTasks = verification ? JSON.parse(verification) : [];
+            console.log('🔍 Verification: saved', verifiedTasks.length, 'tasks');
+            if (verifiedTasks.length !== updatedTasks.length) {
+              console.error('❌ VERIFICATION FAILED! Expected', updatedTasks.length, 'but got', verifiedTasks.length);
+              console.error('❌ Retrying save...');
+              await saveToAsyncStorage(updatedTasks);
+            } else {
+              console.log('✅ Verification passed - data integrity confirmed');
+            }
+          } catch (verifyError) {
+            console.error('⚠️  Verification check failed (non-critical):', verifyError);
+          }
 
           return newTask;
         } catch (error) {
