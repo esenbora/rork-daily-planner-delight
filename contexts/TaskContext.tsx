@@ -49,6 +49,7 @@ export const [TaskProvider, useTasks] = createContextHook(() => {
 
   const unsubscribeRef = useRef<(() => void) | null>(null);
   const migrationAttemptedRef = useRef<boolean>(false);
+  const savingRef = useRef<boolean>(false); // Prevents race condition between manual save and auto-save
 
   // Load tasks from AsyncStorage (fallback/offline mode)
   const loadFromAsyncStorage = useCallback(async () => {
@@ -200,8 +201,9 @@ export const [TaskProvider, useTasks] = createContextHook(() => {
 
   // Save to AsyncStorage when tasks change (offline mode only)
   // NOTE: We removed tasks.length > 0 check to allow saving even empty task list (first task scenario)
+  // NOTE: savingRef prevents race condition between manual saves (addTask/updateTask/deleteTask) and auto-save
   useEffect(() => {
-    if (!useFirestore && !isLoading) {
+    if (!useFirestore && !isLoading && !savingRef.current) {
       console.log('💾 Auto-save triggered, tasks count:', tasks.length);
       saveToAsyncStorage(tasks);
     }
@@ -237,6 +239,9 @@ export const [TaskProvider, useTasks] = createContextHook(() => {
         console.log('📋 Adding task to AsyncStorage (offline mode)...');
 
         try {
+          // Set saving flag to prevent auto-save race condition
+          savingRef.current = true;
+
           // Create the new task synchronously to capture it
           const maxOrder = tasks.length > 0 ? Math.max(...tasks.map(t => t.order || 0)) : 0;
           const newTask: Task = {
@@ -266,6 +271,9 @@ export const [TaskProvider, useTasks] = createContextHook(() => {
           console.error('❌ Failed to add task to AsyncStorage:', error);
           logError(error as Error, { context: 'addTask_AsyncStorage' });
           throw error;
+        } finally {
+          // Always clear the saving flag
+          savingRef.current = false;
         }
       }
     },
@@ -287,10 +295,18 @@ export const [TaskProvider, useTasks] = createContextHook(() => {
           throw error;
         }
       } else {
-        setTasks(prev => prev.map(task => (task.id === id ? { ...task, ...updates } : task)));
+        // AsyncStorage mode - prevent race condition with auto-save
+        try {
+          savingRef.current = true;
+          const updatedTasks = tasks.map(task => (task.id === id ? { ...task, ...updates } : task));
+          setTasks(updatedTasks);
+          await saveToAsyncStorage(updatedTasks);
+        } finally {
+          savingRef.current = false;
+        }
       }
     },
-    [useFirestore]
+    [useFirestore, tasks, saveToAsyncStorage]
   );
 
   // Toggle task completion
@@ -313,12 +329,18 @@ export const [TaskProvider, useTasks] = createContextHook(() => {
           throw error;
         }
       } else {
-        setTasks(prev =>
-          prev.map(task => (task.id === id ? { ...task, completed: newCompletedState } : task))
-        );
+        // AsyncStorage mode - prevent race condition with auto-save
+        try {
+          savingRef.current = true;
+          const updatedTasks = tasks.map(task => (task.id === id ? { ...task, completed: newCompletedState } : task));
+          setTasks(updatedTasks);
+          await saveToAsyncStorage(updatedTasks);
+        } finally {
+          savingRef.current = false;
+        }
       }
     },
-    [useFirestore, tasks]
+    [useFirestore, tasks, saveToAsyncStorage]
   );
 
   // Delete task
@@ -339,10 +361,18 @@ export const [TaskProvider, useTasks] = createContextHook(() => {
           throw error;
         }
       } else {
-        setTasks(prev => prev.filter(task => task.id !== id));
+        // AsyncStorage mode - prevent race condition with auto-save
+        try {
+          savingRef.current = true;
+          const updatedTasks = tasks.filter(task => task.id !== id);
+          setTasks(updatedTasks);
+          await saveToAsyncStorage(updatedTasks);
+        } finally {
+          savingRef.current = false;
+        }
       }
     },
-    [useFirestore]
+    [useFirestore, tasks, saveToAsyncStorage]
   );
 
   // Reorder tasks
