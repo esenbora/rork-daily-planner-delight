@@ -89,6 +89,7 @@ export function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
   };
 
   const handleTaskAdded = (task: OnboardingTask) => {
+    console.log('🎓 Onboarding: Task added -', task.title);
     setFirstTask(task);
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
 
@@ -113,14 +114,16 @@ export function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
   };
 
   const completeOnboarding = async () => {
+    console.log('🎓 Onboarding: Completing onboarding, firstTask:', firstTask?.title || 'none');
     try {
       await AsyncStorage.multiSet([
         [ONBOARDING_COMPLETE_KEY, 'true'],
         [ONBOARDING_GOAL_KEY, dailyGoalHours.toString()],
       ]);
+      console.log('🎓 Onboarding: Settings saved, calling onComplete callback');
       onComplete(firstTask);
     } catch (error) {
-      console.error('Failed to save onboarding status:', error);
+      console.error('❌ Failed to save onboarding status:', error);
       onComplete(firstTask);
     }
   };

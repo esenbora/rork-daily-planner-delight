@@ -182,8 +182,11 @@ export default function PlannerScreen() {
     startMinute: number;
     duration: number;
   }) => {
+    console.log('🎯 Onboarding complete handler called, has firstTask:', !!firstTask);
+
     if (firstTask) {
       try {
+        console.log('🎯 Adding first task from onboarding:', firstTask.title);
         const startTime = firstTask.startHour * 60 + firstTask.startMinute;
         await addTask({
           title: firstTask.title,
@@ -195,11 +198,14 @@ export default function PlannerScreen() {
           priority: 'medium',
           repeatType: 'none',
         });
+        console.log('✅ First task added successfully, marking onboarding complete');
       } catch (error) {
-        console.error('Failed to add first task:', error);
+        console.error('❌ Failed to add first task:', error);
       }
     }
+
     markOnboardingComplete();
+    console.log('✅ Onboarding marked as complete');
 
     // Redirect to paywall after onboarding
     router.push('/subscription?source=onboarding');

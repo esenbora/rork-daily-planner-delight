@@ -199,8 +199,10 @@ export const [TaskProvider, useTasks] = createContextHook(() => {
   }, [attemptMigration, loadFromAsyncStorage, saveToAsyncStorage]);
 
   // Save to AsyncStorage when tasks change (offline mode only)
+  // NOTE: We removed tasks.length > 0 check to allow saving even empty task list (first task scenario)
   useEffect(() => {
-    if (!useFirestore && !isLoading && tasks.length > 0) {
+    if (!useFirestore && !isLoading) {
+      console.log('💾 Auto-save triggered, tasks count:', tasks.length);
       saveToAsyncStorage(tasks);
     }
   }, [tasks, useFirestore, isLoading, saveToAsyncStorage]);
@@ -213,6 +215,7 @@ export const [TaskProvider, useTasks] = createContextHook(() => {
       if (useFirestore && userId) {
         // Add to Firestore
         try {
+          console.log('📋 Adding task to Firestore...');
           const maxOrder = tasks.length > 0 ? Math.max(...tasks.map(t => t.order || 0)) : 0;
           const taskWithOrder = { ...task, order: maxOrder + 1 };
 
@@ -222,16 +225,20 @@ export const [TaskProvider, useTasks] = createContextHook(() => {
           const fullTask = { ...taskWithOrder, id: 'temp', completed: false, repeatType: 'none' as const };
           await scheduleTaskNotification(fullTask);
 
+          console.log('✅ Task added to Firestore successfully');
           // Real-time listener will update state automatically
         } catch (error) {
           logError(error as Error, { context: 'addTask', userId });
-          console.error('Failed to add task to Firestore:', error);
+          console.error('❌ Failed to add task to Firestore:', error);
           throw error;
         }
       } else {
         // Add to AsyncStorage (offline mode)
-        setTasks(prev => {
-          const maxOrder = prev.length > 0 ? Math.max(...prev.map(t => t.order || 0)) : 0;
+        console.log('📋 Adding task to AsyncStorage (offline mode)...');
+
+        try {
+          // Create the new task synchronously to capture it
+          const maxOrder = tasks.length > 0 ? Math.max(...tasks.map(t => t.order || 0)) : 0;
           const newTask: Task = {
             ...task,
             id: Date.now().toString() + Math.random().toString(36).substring(2, 11),
@@ -240,14 +247,29 @@ export const [TaskProvider, useTasks] = createContextHook(() => {
             order: maxOrder + 1,
           };
 
-          // Schedule notification
-          scheduleTaskNotification(newTask);
+          console.log('📋 New task created:', newTask.title);
 
-          return [...prev, newTask];
-        });
+          // Update state
+          const updatedTasks = [...tasks, newTask];
+          setTasks(updatedTasks);
+
+          // Schedule notification
+          await scheduleTaskNotification(newTask);
+
+          // CRITICAL: Save to AsyncStorage immediately
+          console.log('💾 Saving to AsyncStorage...');
+          await saveToAsyncStorage(updatedTasks);
+          console.log('✅ Task saved to AsyncStorage successfully');
+
+          return newTask;
+        } catch (error) {
+          console.error('❌ Failed to add task to AsyncStorage:', error);
+          logError(error as Error, { context: 'addTask_AsyncStorage' });
+          throw error;
+        }
       }
     },
-    [useFirestore, tasks]
+    [useFirestore, tasks, saveToAsyncStorage]
   );
 
   // Update task
